@@ -1,0 +1,571 @@
+---
+layout: post
+title:  "XGBoost"
+date:   2018-03-26 16:30:01
+categories: MachineLearning
+tags: MachineLearning
+excerpt: XGBoost
+---
+
+# 简介
+XGBoost全称为eXtreme Gradient Boosting，是基于Gradient Boosting实现的一个高效，便捷，可扩展的一个机器学习库。  
+github地址：[https://github.com/dmlc/xgboost](https://github.com/dmlc/xgboost)
+# Gradient Boosting
+## Boosting
+对于一个学习问题来说（以分类问题为例），给定训练数据集，求一个弱学习算法要比求一个强学习算法要容易的多。Boosting方法就是从弱学习算法出发，反复学习，得到一系列弱分类器，然后组合弱分类器，得到一个强分类器。Boosting方法在学习过程中通过改变训练数据的权值分布，针对不同的数据分布调用弱学习算法得到一系列弱分类器。每轮训练时，提高那些被前一轮弱分类器错误分类样本的权值，而降低那些被正确分类样本的权值，弱分类器的组合时增大分类误差率小的弱分类器的权值，减小分类误差率大的弱分类器的权值（adaboost）。
+## Gradient Boosting
+每一次建立模型是在之前建立模型损失函数的梯度下降方向。
+
+算法流程如下：
+ 
+<img src="/images/xgboost/gb.png" width="60%" height="60%">
+
+ ------
+ 
+可以看出每一步产生的弱分类器$$ h $$拟合的是负梯度，还需要步长$$ \gamma $$。
+如果图中第二步训练基分类器采用的是CART（分类和回归树），并且是对每个叶子节点区域求出$$ \gamma $$而不是对整个基分类器（CART），那么就是GBDT算法。
+设第m颗树的叶子节点区域为<img src="/images/xgboost/r.png" width="10%" height="10%">，那么这棵树的训练时的更新规则就是：
+<img src="/images/xgboost/gbdt_update.png" width="45%" height="45%">
+ 
+------
+CART会把输入样本根据不同的特征分配到各个叶子节点，而每个叶子节点上面都会对应一个实数分数，可以处理如概率预测，排序等问题。
+
+<img src="/images/xgboost/cart.png" width="40%" height="40%">
+ 
+上面的例子是一个预测一个人是否会喜欢电脑游戏的CART，可以把叶子的分数理解为有多可能这个人喜欢电脑游戏。
+ 
+<img src="/images/xgboost/cart2.png" width="40%" height="40%">
+ 
+一颗树往往不够，实际通常会集成多棵树，即Tree Ensemble。在上面的例子中，我们用两棵树来进行预测，对于每个样本的预测结果就是每棵树预测分数的和。
+ 
+# XGBoost
+目标函数（损失函数+正则项，可以看出相比于gbdt，多了正则项）：
+ 
+$$ \sum_{i=1}^n {l(y_i,\hat y_i)} + \sum_k{\Omega(f_k)} ,f_k \in  F $$
+ 
+采用gradient boosting框架，每轮训练出一个基分类器$$ f_t $$：
+ 
+<img src="/images/xgboost/add.png" width="45%" height="45%">
+ 
+第t轮的目标函数可以展开为：
+<img src="/images/xgboost/obj_t.png" width="45%" height="45%"> 
+ 
+可以利用二阶泰勒公式展开：
+ 
+泰勒公式：<img src="/images/xgboost/taylor.png" width="30%" height="30%"> 
+ 
+展开后得到：<img src="/images/xgboost/obj_t_taylor.png" width="45%" height="45%"> 
+ 
+其中：<img src="/images/xgboost/gh.png" width="35%" height="35%"> 
+ 
+可以看出gbdt在优化时只用到一阶导数信息，xgboost则对目标函数进行了二阶泰勒展开，同时用到了一阶导和二阶导。
+ 
+------
+ 
+定义树的预测值：
+ 
+<img src="/images/xgboost/ftx.png" width="45%" height="45%">
+
+------
+ 
+定义正则项：一棵树里面节点的个数，以及每个树叶子节点上面输出分数的L2的平方：
+ 
+<img src="/images/xgboost/omega.png" width="40%" height="40%">
+ 
+------
+ 
+可以把目标函数也整理成T个独立的二次函数的形式：
+ 
+<img src="/images/xgboost/obj_m.png" width="45%" height="45%">
+
+其中定义叶子节点j包含的样本集合为： <img src="/images/xgboost/i.png" width="12%" height="12%">
+ 
+------
+ 
+那么如果树的结构是固定的（即q(x)是固定的），则目标函数最小值为：
+ 
+<img src="/images/xgboost/obj_v.png" width="40%" height="40%">
+其中<img src="/images/xgboost/gh2.png" width="21%" height="21%">
+ 
+------
+ 
+我们可以把目标函数叫做结构分数(structure score)。认为这个就是类似吉尼系数对树结构进行打分的函数。下面是一个具体的打分函数计算的例子
+ 
+<img src="/images/xgboost/ss.png" width="48%" height="48%">
+ 
+------
+
+建树：
+ 
+暴力的方法：枚举每一种可能的结构，计算树的结构分数，求最优值。
+ 
+然而枚举每一种可能的树的结构是不现实的，一般采用贪心法来建树，从深度为0开始，对每个叶子节点进行分裂，分裂的依据是分裂当前节点得到最大的结构分数：
+ 
+首先定义分裂一个叶子节点所带来的增益，为左子树分数+右子树分数-不分裂父节点的分数
+ 
+<img src="/images/xgboost/gain.png" width="30%" height="30%">
+ 
+有了这个增益，就可以通过求最大的增益来找到最优的分裂特征值。
+ 
+所以贪心法建树过程是：
+```
+for node in 所有的叶子节点 
+{
+    for f in 所有的特征
+    {
+        对所有的特征值排序
+        线性扫描找到最优的切分特征值
+        记录最优的分裂特征及特征值
+    }
+    利用最优的分裂特征及特征值来分裂node
+}
+ 
+重复上述过程，逐层建树，直到最优的增益值小于等于0
+```
+
+建一颗深度为k的的树的时间复杂度为：$$ O(kdnlog{n}) $$，其中n是样本数，d是特征数。
+ 
+------ 
+ 
+利用上述增益建树的过程，也对应了对树的剪枝：当引入的分割带来的增益小于一个阀值的时候，我们可以剪掉这个分割（即pre-stopping）。
+ 
+但是也可能存在一个可能是当前的分隔增益虽然小于0，但是它有利于后续的分隔，让后续的分隔增益更大，因此还可以采用后剪枝策略：
+建树直到最大深度，然后再剪掉所有增益为负的分隔。
+ 
+------ 
+ 
+Shrinkage（缩减）：
+xgboost在进行完一次迭代后，会将当前模型的叶子节点的值乘上一个系数，主要是为了削弱每棵树的影响，让后面有更大的学习空间。有助于避免过拟合。
+
+------  
+ 
+
+# XGBoost的优化
+XGBoost在实现时做了一些优化：
+- 在寻找最佳分割点时，考虑传统的枚举每个特征的所有可能分割点的贪心法效率太低，xgboost实现了一种可并行的近似直方图算法。
+- 列抽样（column subsampling）：xgboost借鉴了随机森林的做法，支持列抽样，不仅能降低过拟合，还能减少计算。
+- Sparsity-aware Split Finding：可以为特征的值有缺失的样本学习默认的分裂方向（即左子树还是右子树）。
+ <img src="/images/xgboost/sparse_aware.png" width="38%" height="38%">
+  可以看出首先按特征升序排序，并按照默认把缺失特征分到右子树的方式来求得最优score，
+  然后再按特征降序排序，并按照默认把缺失特征分到左子树的方式来求得最优score。
+- 对数据排序是非常耗时间的地方。xgboost事先对每列特征排序，多列组成一个按列存储的block。便于并行，多个block之间可以并行处理。
+- 按照特征列方式存储能优化寻找最佳的分割点，但是当以行计算梯度数据时会导致内存的不连续访问，严重时会导致cache miss，降低算法效率。paper中提到，可先将数据收集到线程内部的buffer
+- xgboost 还考虑了当数据量比较大，内存不够时怎么有效的使用磁盘
+ 
+# XGBoost的实现
+
+xgboost实现支持分布式并行。数据的存取使用了工具库[dmlc-core](https://github.com/dmlc/dmlc-core)，分布式的实现基于分布式通信库[rabit](https://github.com/dmlc/rabit)（高效的Allreduce and Broadcast）。
+
+## 数据存储格式
+xgboost中，数据存储的数据结构为CSR。
+
+<img src="/images/xgboost/csr.png?version=1" width="38%" height="38%">
+
+value：存储实际的元素  
+column：表示value中每个元素的列号  
+offset：表示每行第一个元素在value中的位置  
+可以看出这种格式可以减少sparse数据存储的空间，但是对于dense数据反而占用了更多空间。
+ 
+## 自顶向下看训练流程
+ 
+```cpp
+//cli_main.cc  
+|--CLITrain()  
+  |--DMatrix::Load()  // 将训练数据加载到内存
+  |--Learner::Create()  // 用来训练/预测的类
+  |--Learner::Configure()  //加载配置
+  |--Learner::InitModel()  // 初始化模型
+  |--for (int iter = 0; iter < max_iter; ++iter) // 每一轮迭代  
+     {  
+       Learner::UpdateOneIter();  // 训练
+       Learner::EvalOneIter();    // 评估
+     }  
+```
+
+UpdateOneIter函数更新每一轮的模型。
+ 
+```cpp
+//learner.cc
+
+|--UpdateOneIter()
+    // 初始化DMatrix
+    |--learner::LazyInitDMatrix()
+    // 预测训练数据
+    |--learner::PredictRaw()
+    // 根据预测结果来计算一阶导和二阶导
+    |--ObjFunction::GetGradient()
+    // 利用Gradient Boost生成新的树
+    |--GradientBooster::DoBoost()
+```
+调用PredictRaw()函数来预测时，是根据具体的模型来预测的，具体的模型可以是利用回归树作为其弱分类器(gbtree)也可以是线性模型(gblinear)。
+调用GetGradient()函数来计算一阶导、二阶导时，是根据具体的目标函数来计算的，目标函数可以是square loss、logistic loss、softmax等。
+可以看出xgboost的工程实现中，将模型和目标函数分开，更具扩展性。
+模型（model）：how to make prediction y given x
+参数（parameters）：the things we need to learn from data
+目标函数（objective function）：loss on training data + regularization（how complicated the model is）
+ 
+再看一下DoBoost函数，对于gbtree，它调用了 BoostNewTrees() 函数。在 BoostNewTrees() 中先初始化了 TreeUpdater 实例，再调用其Update函数生成一棵树。
+ 
+```cpp
+//gbtree.cc
+
+|--GBTree::DoBoost()
+
+    |--GBTree::BoostNewTrees()
+
+        |--GBTree::InitUpdater()
+
+        |--TreeUpdater::Update()
+```
+
+TreeUpdater 是一个抽象类，根据使用的树结点分裂算法不同，派生出许多不同的Updater类。 比如updater_colmaker使用贪婪搜索算法，通过枚举所有的特征来寻找最佳分裂点；updater_histmaker使用直方图法；updater_prune是剪枝。
+ 
+## 树结点分裂算法
+ 
+### Exact Greedy
+ 
+<img src="/images/xgboost/greedy.png" width="38%" height="38%">
+
+#### 单机版
+ 
+xgboost中，类ColMaker使用了贪婪搜索算法，即对枚举每一个特征及其特征值来找最优分裂特征值。
+ 
+首先看一下Update函数
+
+```cpp
+void Update(const std::vector<bst_gpair> &gpair, //保存了对应样本实例的一阶导数和二阶导数
+              DMatrix* dmat,// 对应样本实例的特征
+              const std::vector<RegTree*> &trees // new_trees 用于存储构造好的回归树
+            ) override {
+    TStats::CheckInfo(dmat->info());
+    // rescale learning rate according to size of trees
+    float lr = param.learning_rate;
+    param.learning_rate = lr / trees.size();
+    TConstraint::Init(&param, dmat->info().num_col);
+    // 建树，每一轮可以建多个树
+    for (size_t i = 0; i < trees.size(); ++i) {
+      Builder builder(param);// Builder是具体构建一棵树的类
+      builder.Update(gpair, dmat, trees[i]); // 构建一棵树
+    }
+    param.learning_rate = lr;
+  }
+```
+
+再看一下Builder::Update函数。构建一棵树是逐层构建的，
+
+```cpp
+// update one tree, growing
+    virtual void Update(const std::vector<bst_gpair>& gpair,
+                        DMatrix* p_fmat,
+                        RegTree* p_tree) {
+      //初始化 Builder
+      this->InitData(gpair, *p_fmat, *p_tree);
+      // 初始化树根结点的权值和增益
+      this->InitNewNode(qexpand_, gpair, *p_fmat, *p_tree);
+      for (int depth = 0; depth < param.max_depth; ++depth) {
+        // 给队列中的当前层结点寻找最优分裂的特征
+        this->FindSplit(depth, qexpand_, gpair, p_fmat, p_tree);
+        // 当前层各个非叶子结点中的样本 分到下一层的各个结点中
+        this->ResetPosition(qexpand_, p_fmat, *p_tree);
+        // 更新队列，push下一层的结点
+        this->UpdateQueueExpand(*p_tree, &qexpand_);
+        // 计算队列中下一层结点的权值和增益
+        this->InitNewNode(qexpand_, gpair, *p_fmat, *p_tree);
+        // if nothing left to be expand, break
+        if (qexpand_.size() == 0) break;
+      }
+      // 由于树的深度限制，将队列中剩下结点都设置为树的叶子
+      // set all the rest expanding nodes to leaf
+      for (size_t i = 0; i < qexpand_.size(); ++i) {
+        const int nid = qexpand_[i];
+        (*p_tree)[nid].set_leaf(snode[nid].weight * param.learning_rate);
+      }
+      // remember auxiliary statistics in the tree node
+      for (int nid = 0; nid < p_tree->param.num_nodes; ++nid) {
+        p_tree->stat(nid).loss_chg = snode[nid].best.loss_chg;
+        p_tree->stat(nid).base_weight = snode[nid].weight;
+        p_tree->stat(nid).sum_hess = static_cast<float>(snode[nid].stats.sum_hess);
+        snode[nid].stats.SetLeafVec(param, p_tree->leafvec(nid));
+      }
+    } 
+```
+
+其中，FindSplit函数计算最优切分点 
+
+```cpp
+// find splits at current level, do split per level
+    inline void FindSplit(int depth,
+                          const std::vector<int> &qexpand,
+                          const std::vector<bst_gpair> &gpair,
+                          DMatrix *p_fmat,
+                          RegTree *p_tree) {
+      std::vector<bst_uint> feat_set = feat_index;
+      // 采样
+      if (param.colsample_bylevel != 1.0f) {
+        std::shuffle(feat_set.begin(), feat_set.end(), common::GlobalRandom());
+        unsigned n = std::max(static_cast<unsigned>(1),
+                              static_cast<unsigned>(param.colsample_bylevel * feat_index.size()));
+        CHECK_GT(param.colsample_bylevel, 0U)
+            << "colsample_bylevel cannot be zero.";
+        feat_set.resize(n);
+      }
+      dmlc::DataIter<ColBatch>* iter = p_fmat->ColIterator(feat_set);
+      // 遍历每一批特征
+      while (iter->Next()) {
+        // 计算最优分裂特征值
+        this->UpdateSolution(iter->Value(), gpair, *p_fmat);
+      }
+      // after this each thread's stemp will get the best candidates, aggregate results
+      this->SyncBestSolution(qexpand);
+      // get the best result, we can synchronize the solution
+      for (size_t i = 0; i < qexpand.size(); ++i) {
+        const int nid = qexpand[i];
+        NodeEntry &e = snode[nid];
+        // now we know the solution in snode[nid], set split
+        if (e.best.loss_chg > rt_eps) {
+          p_tree->AddChilds(nid);
+          (*p_tree)[nid].set_split(e.best.split_index(), e.best.split_value, e.best.default_left());
+          // mark right child as 0, to indicate fresh leaf
+          (*p_tree)[(*p_tree)[nid].cleft()].set_leaf(0.0f, 0);
+          (*p_tree)[(*p_tree)[nid].cright()].set_leaf(0.0f, 0);
+        } else {
+          (*p_tree)[nid].set_leaf(e.weight * param.learning_rate);
+        }
+      }
+    }
+```
+
+其中UpdateSolution计算每一批特征的最优分裂值
+ 
+```cpp
+// update the solution candidate
+    virtual void UpdateSolution(const ColBatch& batch,
+                                const std::vector<bst_gpair>& gpair,
+                                const DMatrix& fmat) {
+      const MetaInfo& info = fmat.info();
+      // start enumeration
+      const bst_omp_uint nsize = static_cast<bst_omp_uint>(batch.size);
+      #if defined(_OPENMP)
+      const int batch_size = std::max(static_cast<int>(nsize / this->nthread / 32), 1);
+      #endif
+      int poption = param.parallel_option;
+      if (poption == 2) {
+        poption = static_cast<int>(nsize) * 2 < this->nthread ? 1 : 0;
+      }
+      if (poption == 0) {
+        // 多个线程处理不同的特征。每个线程利用其拿到的特征来求每个叶子节点的最优分裂特征及特征值
+        // 然后对每个叶子节点，求多个线程得到最优值的分裂特征及特征值
+        #pragma omp parallel for schedule(dynamic, batch_size)
+        for (bst_omp_uint i = 0; i < nsize; ++i) {
+          const bst_uint fid = batch.col_index[i];
+          const int tid = omp_get_thread_num();
+          const ColBatch::Inst c = batch[i];
+          const bool ind = c.length != 0 && c.data[0].fvalue == c.data[c.length - 1].fvalue;
+          if (param.need_forward_search(fmat.GetColDensity(fid), ind)) {
+            this->EnumerateSplit(c.data, c.data + c.length, +1,
+                                 fid, gpair, info, stemp[tid]);
+          }
+          if (param.need_backward_search(fmat.GetColDensity(fid), ind)) {
+            this->EnumerateSplit(c.data + c.length - 1, c.data - 1, -1,
+                                 fid, gpair, info, stemp[tid]);
+          }
+        }
+      } else {
+        for (bst_omp_uint i = 0; i < nsize; ++i) {
+          this->ParallelFindSplit(batch[i], batch.col_index[i],
+                                  fmat, gpair);
+        }
+      }
+    }
+```
+ 
+#### 分布式版
+ 
+每个节点分到一部分数据，这里是按列切分来分给不同的节点。
+ 
+每个节点有完整的样本数目，有部分特征。每个节点根据这部分特征求出树的当前层的所有叶子节点的最优分割，然后利用AllReduce得到全局的最优分割。
+ 
+因此分布式版本的ColMaker求出的也是准确值。
+
+ 
+### Histogram
+ 
+每个节点分到一部分数据，这里是按列切分来分给不同的节点。
+ 
+按贪心法精确查找分割的最优特征值通常开销较大，贪心法遍历了每个特征的每个值。近似法可以采用直方图的方法，将每个特征分桶，每个桶存储一个范围内的特征值，“看成同一特征值”。
+可以看作就是步长的差别，精确查找是步长为1的来遍历特征值，直方图法是步长>1的来遍历特征值。
+ 
+### 近似算法如何得到候选分裂特征值
+ 
+近似算法（例如直方图法）其中重要的一步是找到每个叶子节点候选分裂特征值。论文中提出了Weighted Quantile Sketch。
+ 
+#### Quantile Sketch
+
+##### 介绍
+
+Quantile（分位点）意思是ranking，比如有n个元素，$$ \phi - quantile $$ 就是求第$$ \lfloor \phi \times N \rfloor $$个元素。
+
+<img src="/images/xgboost/exm.png" width="39%" height="39%">
+ 
+原始的做法是先将N个元素排序，然后找第$$ \lfloor \epsilon \times N \rfloor $$个元素。这种方法是离线方法，在内存有限的情况下并不适用于流式数据。
+ 
+那么可以针对流式数据提出允许一定错误的quantile：
+$$ \epsilon $$ - approximate quantile ：查询一个rank的值，跟实际的值之间的距离最大为$$ \lfloor \phi \times N \rfloor $$
+ 
+即如果期望值是$$ \phi - quantile $$ （第$$ \lfloor \phi \times N \rfloor $$个元素）那么$$ \epsilon $$ - approximate $$ \phi $$ - quantile 可以是一下范围的任一值
+ 
+$$ (\phi - \epsilon) \times N   \le  element \le (\phi + \epsilon) \times N $$
+
+<img src="/images/xgboost/exm2.png" width="39%" height="39%">
+ 
+对于流式数据，N是在不断变大的，上面这个范围包含的值也在增大，可以去掉一些值依然保持query的误差在$$ \epsilon $$内。
+ 
+##### 数据结构
+ 
+定义三元组$$ [ v , r_{min} (v) , r_{max}(v)] $$ 表示v这个值能作为quantile query answer的rank范围。
+其中$$ r_{min} (v) $$表示v可以作为answer的最小rank，$$ r_{max}(v) $$表示v可以作为answer的最大rank。
+各个范围也可以有交叉。
+
+------
+
+定义quantile summary S为：
+
+$$ ([v_0, r_{min}(v_0), r_{max}(v_0)], [v_0, r_{min}(v_1), r_{max}(v_1)], ... , [v_0, r_{min}(v_{s-1}), r_{max}(v_{s-1})]) $$
+
+其中$$ v_0 $$是S中的最小值，$$ v_{s-1} $$是S中的最大值。
+
+example:
+
+<img src="/images/xgboost/exm3.png" width="39%" height="39%">
+
+上图得出的quantile summary为：
+
+$$ ([13, 1, 3], [26, 4, 6], [89, 6, 9]) $$
+
+------
+
+给定一个summary S，有如下结论：
+
+$$ 给定一个summary S，可以求出误差在e=max_{all}(r_{max}(v_i) - r_{min}(v_{i-1})) / 2 内的\phi - quantile $$
+
+------
+
+summary的另一个写法如下，设：
+
+$$
+
+g_i = r_{min}(v_i) - r_{min}(v_{i-1}) \\
+\delta_i = r_{max}(v_i) - r_{min}(v_i)
+
+$$
+
+summary可以改写为如下形式：
+
+$$ ([v_0, g_0, \delta_0], [v_0, g_1, \delta_1], ... , [v_0, g_{s-1}, \delta_{s-1})]) $$
+
+------
+
+设$$ r = \phi \times N $$，即我们要找到输入的N的元素中rank为r的元素。当误差e为$$ max_{all}(g_i + \delta_i) / 2 $$时，我们总可以找到一个
+元素$$ v_i $$满足下面的条件，并将$$ v_i $$的值作为结果返回：
+
+$$ r - e \le r_{min}(v_i) 且 r_{max}(v_i) \le r + e $$
+
+证明：
+
+<img src="/images/xgboost/p1.png" width="60%" height="60%">
+
+<img src="/images/xgboost/p2.png" width="60%" height="60%">
+
+<img src="/images/xgboost/p3.png" width="60%" height="60%">
+
+可以看出如果保证$$ max_{all}(r_{max}(v_i) - r_{min}(v_{i-1})) / 2 \le \epsilon n  $$，那么查询结果最坏情况的误差是$$ \epsilon n $$。
+ 
+##### Greenwlad and Khanna's Algorithm
+
+<img src="/images/xgboost/algo1.png" width="39%" height="39%">
+
+对于上图的insert操作，就是排序后找到合适的位置插入即可（insert sort）。
+
+对于delete操作，就是删除多余的元素，仍能保证查询误差在e之内。
+
+
+考虑如下summary，
+
+<img src="/images/xgboost/summary1.png" width="50%" height="50%">
+
+若有$$ g_j +...+g_i + g_{i+1} + \delta_{i+1} \le 2 \epsilon n $$，那么可以做如下替换：
+
+<img src="/images/xgboost/replace1.png" width="48%" height="48%">
+
+由此得到的summary的e依然不变。这就是delete的原理。
+
+因此GK Algorithm如下：
+
+<img src="/images/xgboost/gk1.png" width="65%" height="65%">
+
+##### 多个summary的合并
+
+combine操作：多个summary可以合并，合并后的summary大小为合并前每个summary的长度之和。  
+prune操作：合并后的summary可能较长，需要删除多余元素。
+
+###### combine
+
+<img src="/images/xgboost/combine.png" width="65%" height="65%">
+
+合并之后的误差是合并前的summary的误差最大值。
+
+###### prune
+
+<img src="/images/xgboost/prune.png" width="65%" height="65%">
+
+prune操作后的误差变为：
+
+<img src="/images/xgboost/prune2.png" width="65%" height="65%">
+
+
+##### A Fast quantile summary algorithm
+
+<img src="/images/xgboost/fast1.png" width="65%" height="65%">
+
+<img src="/images/xgboost/fast2.png" width="70%" height="70%">
+
+<img src="/images/xgboost/fast3.png" width="50%" height="50%">
+ 
+#### Weighted Quantile Sketch 
+
+xgboost中使用了加权的Quantile Sketch，即每个特征值都带有一个权重，论文链接如下
+
+[xgboost-paper.pdf](/docs/xgboost/xgboost-paper.pdf) 
+
+
+# 参考资料
+
+[https://en.wikipedia.org/wiki/Gradient_boosting#Algorithm](https://en.wikipedia.org/wiki/Gradient_boosting#Algorithm)
+
+[https://www.jianshu.com/p/005a4e6ac775](https://www.jianshu.com/p/005a4e6ac775)
+
+[http://blog.csdn.net/a819825294/article/details/51206410](http://blog.csdn.net/a819825294/article/details/51206410)
+
+[http://blog.csdn.net/a819825294/article/details/51188740](http://blog.csdn.net/a819825294/article/details/51188740)
+
+[https://cloud.tencent.com/developer/article/1005670](https://cloud.tencent.com/developer/article/1005670)
+
+[https://github.com/dmlc/xgboost/issues/1832#event-880429714](https://github.com/dmlc/xgboost/issues/1832#event-880429714)
+
+[http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Greenwald.html](http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Greenwald.html)
+
+[http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Greenwald2.html](http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Greenwald2.html)
+
+[http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Greenwald-D.html](http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Greenwald-D.html)
+
+[http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Zhang.html](http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Zhang.html)
+
+[http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Zhang2.html](http://www.mathcs.emory.edu/~cheung/Courses/584-StreamDB/Syllabus/08-Quantile/Zhang2.html)
+
+[https://datascience.stackexchange.com/questions/10997/need-help-understanding-xgboosts-approximate-split-points-proposal](https://datascience.stackexchange.com/questions/10997/need-help-understanding-xgboosts-approximate-split-points-proposal)
+
+[https://tracholar.github.io/wiki/machine-learning/xgboost.html](https://tracholar.github.io/wiki/machine-learning/xgboost.html)
+
+[BoostedTree.pdf](/docs/xgboost/BoostedTree.pdf)
+
+[xgboost-paper.pdf](/docs/xgboost/xgboost-paper.pdf)

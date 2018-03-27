@@ -1,0 +1,348 @@
+---
+layout: post
+title:  "KNN的实现"
+date:   2016-11-21 20:18:02
+categories: MachineLearning
+tags: MachineLearning
+excerpt: KNN的实现
+---
+
+# accurate knn
+在距离空间里，如果一个样本的最接近的k个邻居里，绝大多数属于某个类别，则该样本也属于这个类别。KNN算法中，所选择的邻居都是已经正确分类的对象。该方法只依据最邻近的一个或者几个样本的类别来决定待分样本所属的类别。
+
+## k-d tree
+
+### 简介
+1. k-d tree，即K-dimensional tree，是一棵二叉树，树中存储的是一些K维数据。在一个K维数据集合上构建一棵k-d tree代表了对该K维数据集合构成的K维空间的一个划分。
+2. 在二叉查找树时，一个1维数据根据其与当前结点比较大小来决定是划分到左子树还是右子树。同理，可以将一个K维数据与k-d tree的当前结点进行比较，只不过不是对K维数据进行整体的比较，而是选择某一个维度Di，然后比较两个数在该维度上的大小。即每次选择一个维度Di来对K维数据进行划分，相当于用一个垂直于该维度Di的超平面将K维数据空间一分为二，平面一边的所有K维数据在Di维度上的值小于平面另一边的所有K维数据对应维度上的值。
+ 
+###  如何构造k-d tree
+1. 每次对子空间的划分时，确定在哪个维度上进行划分：
+   每次我们选择维度进行划分时，都选择具有最大方差维度,因为更容易在这个维度上将它们划分开。
+2. 在某个维度上进行划分时，确保在这一维度上的划分得到的两个子集合的数量尽量相等：
+   在维度i上进行划分时，pivot就选择该维度i上所有数据的中位数，这样得到的两个子集合数据个数就基本相同了。
+   
+***
+经典的构造k-d tree的规则如下：
+
+```
+   递归的从根节点不停的划分，直到没有实例：
+       随着树的深度增加，循环的选取坐标轴，作为分割超平面的法向量。
+       每次均为所有对应实例的中位数的实例作为切分点，切分点作为父节点，左右两侧为划分的作为左右两子树。
+```
+
+2-d tree ：
+
+![](/images/accurate_knn/1.png){: width="350px" height="200px"}
+
+### k-d树的搜索
+
+```
+算法：k-d树最邻近查找  
+输入：Kd kd，    //k-d tree类型  
+      target     //查询数据点  
+输出：nearest， //最邻近数据点  
+      dist      //最邻近数据点和查询点间的距离  
+  
+1. If kd为NULL，则设dist为infinite并返回  
+2. //进行二叉查找，生成搜索路径  
+    kd_point = &Kd；                 //kd_point中保存k-d tree根节点地址  
+    nearest = kd_point->node_data；  //初始化最近邻点  
+    min_dist = dist(nearest, target)
+   While（kd_point != NULL）  
+   　　push（kd_point）到search_path中； //search_path是一个栈，存储着搜索路径节点指针  
+       If min_dist  > dist（Kd_point -> Node_data，target）  
+   　　　　nearest  = kd_point -> Node_data；    //更新最近邻点  
+   　　　　min_dist = dist(kd_point，target）；  //更新最近邻点与查询点间的距离
+       End if
+       s = kd_point->split；                     //确定待分割的方向  
+   　　If target[s] <= kd_point->node_data[s]   //进行二叉查找  
+   　　　　kd_point = kd_point->left；  
+   　　Else  
+   　　　　kd_point = kd_point->right；  
+       End if
+   End while  
+3. //回溯查找  
+   While（search_path非空）  
+   　　bt_point = search_path.top()；
+       search_path.pop()；
+   　　s = bt_point->split；//确定分割方向  
+   　　If dist（target[s]，bt_point->node_data[s]） < min_dist   //判断还需进入的子空间  
+   　　　　If target[s] <= bt_point->node_data[s]  
+   　　　　　　kd_point = bt_point->right；  //如果target位于左子空间，就应进入右子空间  
+   　　　　Else  
+   　　　　　　kd_point = bt_point->left;    //如果target位于右子空间，就应进入左子空间  
+           End if
+   　　　  search_path.push(kd_point)；
+       End if  
+   　　If min_dist > dist（kd_point->node_data，target）  
+   　　　　nearest  = kd_point->node_data；                 //更新最近邻点  
+   　　　　min_dist = dist（kd_point->node_data,target）；  //更新最近邻点与查询点间的距离的  
+       End if
+   End while   
+
+
+```
+***
+优先检索包含最近邻点可能性较高的空间。
+还可以设置一个运行时间/迭代次数的限制，提前停止。
+在二叉搜索的时候将搜索路径另一侧的分支加入到优先级队列中，供回溯时查找。而优先级队列的排序就是根据目标与分割超平面的距离。
+
+```
+算法： BBF最近邻查询
+输入：Kd kd，    //k-d tree类型  
+      target     //查询数据点  
+输出：nearest，  //最邻近数据点  
+      dist       //最邻近数据点和查询点间的距离  
+1. If kd是空的，则设dist为无穷大并返回
+2. nearest = kd.node_data；
+   将&kd压入优先级队列pq中；
+   /*建立优先级队列。首先压入根节点，优先级队列中记录的都是k-d树节点，它们都是k-d树节点它们都是需要回溯的树节点，回溯这些树节点的优先级取决于它们离查询点的距离，距离越近，优先级越高*/
+   While (pq不为空)
+   /*优先检查这个树节点表示的空间中是否有更好的最邻近*/
+       kd_point = pq.top();//提取优先级最高的节点
+       pq.pop();
+       While (kd_point不为空)
+           s = kd_point->split;
+           current_data = kd_point->node_data
+           If min_dist > distance(current_data, target)
+               nearest = current_data 
+               min_dist = distance(current_data, target)
+           End if
+           If target[s] <= kd_point->node_data[s]
+               kd_point = kd_point->left
+               pq.push(kd-point->right)
+           Else
+               kd_point = kd_point->right
+               pq.push(kd-point->left)
+           End if
+       End while
+   End while
+           
+```
+
+## vantage-point tree
+
+### 简介
+1. 对于k-d tree, 假设数据集的维数为D，一般来说要求数据的规模N满足N?D，才能达到高效的搜索。所以这就引出了一系列对k-d树算法的改进：BBF算法，和一系列M树、VP树、MVP树等高维空间的搜索的树。
+2. k-d tree算法在高维空间中由于过多的回溯次数导致算法查找效率下降。（随着维度K的增大，与target的超球面相交的超矩形（子树分支所在的区域）就会增加，这就意味着需要回溯判断的树分支就会更多，从而算法的查找效率便会下降很大）
+3. vp tree与k-d tree相似，使用的是圆(circular)、球（spherical）、超球(spherical)等来划分，而不是k-d tree的线性(rectilinear).
+4. vp tree只需要知道如何计算距离即可，不需要关于数据的其他信息。
+
+![](/images/accurate_knn/2.png)
+
+### 简易的单机示例
+
+```cpp
+#include <iostream>
+#include <vector>
+#include <stack>
+#include <queue>
+#include <algorithm>
+using namespace std;
+ 
+// 数据点之间的距离
+double distance(const vector<double>& lhs, const vector<double>& rhs) {
+    double result = 0;
+    for (int i = 0; i < lhs.size(); ++i) {
+        double tmp = lhs[i] - rhs[i];
+        result += tmp * tmp;
+    }
+    return sqrt(result);
+}
+// vp树的树节点
+struct Node {
+    Node():index(0), radius(0), left(nullptr), right(nullptr) {
+    }
+    ~Node() {
+        delete left;
+        delete right;
+    }
+    int index;
+    int center;
+    double radius;
+    Node* left;
+    Node* right;
+};
+// 优先级队列中的每个对象
+struct HeapItem {
+    HeapItem():dist(0), node(nullptr) {
+    
+    }
+    ~HeapItem() {
+        
+    }
+    // 最大堆
+    friend bool operator<(const HeapItem&lhs, const HeapItem& rhs) {
+        return lhs.dist < rhs.dist;
+    }
+    double dist;
+    int node;
+};
+// 用于nth_element中对象的比较
+struct CMP {
+    CMP(vector<double>& c) :_center(c) {
+    
+    }
+    bool operator()(const vector<double>& lhs, const vector<double>& rhs) {
+        return distance(lhs, _center) < distance(rhs, _center);
+    }
+    vector<double> _center;
+};
+// vp树
+class VPTree {
+public:
+    VPTree() :_root(nullptr), _cur_max(0),_k(0) {
+    }
+    ~VPTree() {
+        delete_vptree(_root);
+    }
+    // 建树
+    void build_tree(vector<vector<double>>& b) {
+        set_data(std::move(b));
+        build_tree_node(0, _data.size(), 0);
+    }
+    vector<vector<double>> query(vector<double> data_node) {
+        // 优先级队列（此处是最大堆）用来存前K小
+        priority_queue<HeapItem> pq;
+        // 栈， “深搜”
+        stack<Node*> path;
+        path.push(_root);
+        while (!path.empty()) {
+            Node* cur = path.top();
+            path.pop();
+            if (cur == nullptr) {
+                continue;
+            }
+            // target与当前树节点的中心点的距离
+            double dist_with_center = distance(_data[cur->center], data_node);
+            //  更新优先级队列
+            if (pq.size() < _k || dist_with_center < pq.top().dist) {
+                HeapItem heap_item;
+                heap_item.dist = dist_with_center;
+                heap_item.node = cur->center;
+                pq.push(heap_item);
+                if (pq.size() > _k) {
+                    pq.pop();
+                }
+            }
+            // 剪枝
+            bool left_prune = false;
+            bool right_prune = false;
+            if (pq.size() == _k) {
+                double max_dist_in_pq = pq.top().dist;
+                // 无需搜左子树
+                if (dist_with_center - max_dist_in_pq >= cur->radius) {
+                    left_prune = true;
+                }
+                // 无需搜右子树
+                if (max_dist_in_pq + dist_with_center <= cur->radius) {
+                    right_prune = true;
+                }
+            }
+            // 此情况先搜左子树
+            if (dist_with_center <= cur->radius) {
+                if (right_prune == false) {
+                    path.push(cur->right);
+                }
+                if (left_prune == false) {
+                    path.push(cur->left);
+                }
+            }
+            else { // 此情况先搜右子树
+                if (left_prune == false) {
+                    path.push(cur->left);
+                }
+                if (right_prune == false) {
+                    path.push(cur->right);
+                }
+            }
+        }
+        // 返回结果
+        vector<vector<double>> result;
+        while (!pq.empty()) {
+            result.push_back(_data[pq.top().node]);
+            pq.pop();
+        }
+        return result;
+    }
+    void set_data(vector<vector<double>>& b) {
+        vector<vector<double>>().swap(_data);
+        _data = std::move(b);
+    }
+    void set_k(int k) {
+        _k = k;
+    }
+private:
+    int _k;
+    Node* _root;
+    double _cur_max;
+    vector<vector<double>> _data; 
+    // 建立树节点
+    Node* build_tree_node(int left, int right, int root_index) {
+        if (left == right) {
+            return nullptr;
+        }
+        Node* cur_node = new Node();
+        cur_node->index = root_index;
+        if (right - left > 1) {
+            int median = left + (right - left) / 2;
+            // 找到中位数
+            nth_element(_data.begin() + left, _data.begin() + median, _data.end(),CMP(_data[left]));
+            // 设置半径
+            cur_node->radius = distance(*_data.begin(), *(_data.begin() + median));
+            // 设置中心点
+            cur_node->center = left;
+            // 建立左子树
+            cur_node->left = build_tree_node(left + 1, median + 1, root_index * 2 + 1);
+            // 建立右子树
+            cur_node->right = build_tree_node(median + 1, right, root_index * 2 + 2);
+        }
+        return cur_node;
+    }
+    void delete_vptree(Node* r) {
+        if (!r) {
+            return;
+        }
+        if (r->left) {
+            delete_vptree(r->left);
+        }
+        if (r->right) {
+            delete_vptree(r->right);
+        }
+        delete r;
+    }
+};
+```
+
+### 并行设计
+
+#### 建树
+建立vp树每个节点的过程可以分为两个大部分：
+
+1. 建立较上层节点（用到的数据节点较多）  
+2. 建立较下层节点（用到的数据节点较少）
+
+建立较上层节点可以每个机器共同的建立一个一个的树节点：
+
+1. 每个机器从hdfs上分到一部分数据  
+2. 0号机器取一个数据点作为中心点，并广播给其他机器   
+3. 每个机器计算所有数据点与中心点距离  
+4. 每个机器向table里写数据求得中位数作为半径，把此树节点存入table  
+5. 根据中位数把数据分成两部分作为左右孩子节点的数据  
+
+建立较下层节点由于数据量小了，可以每个机器各自建立不同的树节点：  
+
+1. 每个节点从table中取到存在本地的部分，找到叶子节点  
+2. 继续分割这些叶子节点，得到树节点并存于table中  
+
+#### 查询
+1. 把查询数据分成batch size大小的block  
+2. 使用map来查询每个block中每个数据点的k临近，  
+可以使用优先级队列（最大堆）来查找前k小，同时配合剪枝策略来减少回溯。
+
+## 参考资料
+[从K近邻算法、距离度量谈到KD树、SIFT+BBF算法](http://blog.csdn.net/v_july_v/article/details/8203674)  
+[VP trees: A data structure for finding stuff fast](http://stevehanov.ca/blog/index.php?id=130)  
+[Vantage-point tree](https://en.wikipedia.org/wiki/Vantage-point_tree)  
+[Kd Tree算法原理和开源实现代码](https://my.oschina.net/keyven/blog/221792)

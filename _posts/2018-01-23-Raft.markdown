@@ -1,0 +1,225 @@
+---
+layout: post
+title:  "Raft"
+date:   2018-01-23 15:12:01
+categories: DistributedComputing
+tags: DistributedComputing
+excerpt: Raft
+---
+
+## What is Raft
+
+Raft是斯坦福大学RamCloud项目中提出的分布式一致性复制协议，以易于理解著称。
+
+## Raft's Goal
+
+Raft的总体目标是将log完全一样地复制到集群中的所有机器上，用来创建Replicated State Machine（多副本状态机）。
+设想你有一个程序或应用，你想让它非常可靠，其中一个办法就是，在多个机器上同时运行这同一个程序，
+并且保证完全一样地运行，这就是Replicated State Machine的思想（all servers execute same commands in same order）。
+
+Raft中有一致性模块来保证日志的合理复制。当集群中大多数正常运转时，系统就可以正常运行。
+
+### Approaches to Consensus
+
+1. Symmetric, leader-less：
+对称无中心，所有的server角色相同，client可以向任一server发请求。
+
+2. Asymmetric, leader-based：非对称有中心，任一时刻只有一个leader，其余server服从leader的指挥。client与leader通信。
+
+Raft采用了第2种方式，并且把一致性问题分解为两个问题：一是在有leader的情况下集群如何正常运作，二是leader挂掉之后如何选举更换leader。
+非对称有中心还可以避免多个server的冲突，简化了运行的过程。
+
+接下来从以下六个方面来理解Raft：
+1. Leader election：选取一个server作为leader；能够感知leader挂掉并重新选leader。
+2. Normal operation：leader从客户端收到请求后如何将log复制到其他机器。
+3. Safety and consistency after leader changes：leader变更过程中的安全性和一致性。
+4. Neutralizing old leaders：旧leader没有真的挂掉，重新恢复之后该如何处理。
+5. Client interactions：客户端如何与整个系统交互。
+6. Configuration changes：在集群中增删机器。
+
+## Leader election
+
+Raft中将节点状态分为：
+* Leader：接收Client的请求，并进行复制，任何时刻只有一个Leader
+* Follower：被动接收各种RPC请求
+* Candidate：用于选举出一个新的Leader
+
+各个server之间如何交互：raft中所有server之间的通信都是RPC调用，并且只有两种类型的RPC调用：
+第一种是RequestVote，用于选举leader；第二种是AppendEntries，用于normal operations中leader向其他机器复制log；
+其中心跳是不带数据的AppendEntries RPC请求。
+
+![](/images/raft/1.png){: width="400px" height="150px"}
+
+election timeout：leader需要给其他server发送心跳来维持自己的leader地位。当一个follower超过一定时间没有收到
+心跳，则它认为leader挂掉了,follower开始新的选举。（timeout时间通常为100 - 500ms）
+
+Raft中follower长时间没有接受到心跳（election timeout）就会转为candidate状态，收到多数投票应答之后可以转为leader，
+leader会定期向其他节点发送心跳。当leader和candidate接收到更高版本的消息后，转为follower。
+
+集群启动时候，所有server都是follower，并没有leader，所有的server都一直等待，直到election timeout，
+然后所有server都开始竞选leader
+
+![](/images/raft/2.png){: width="400px" height="150px"}
+
+Raft中将时间划分到term，用于选举，标示某个leader下的normal operation，每个term最多只有一个leader。
+每个server维护着一个current term值，这个值是当前server所认为的当前系统所处于的term。
+term的作用是让raft能够及时识别过期信息。每个term都有一个number，这个number必须单增。
+
+某些term可能会选主失败而没有leader（未达到多数投票应答而超时。一旦出现这种情况，系统立即进入新的term时期，
+开始新的一轮选举）。
+
+一个server竞选的过程：
+1. 将其current term加一
+2. 从follower转变为candidate
+3. 为它自己投一票
+4. 给其他所有server发送RequestVote请求
+5. 若收到了过半server的投票，则立即成为leader并开始向其他server发送心跳；
+若收到了其他leader的rpc请求，则转变为follower；
+若过了election timeout时间后，前面两种情况没有发生，说明选票分散了，重新从步骤1开始竞选。
+
+选举过程中必须保证两点
+1. safety：每个term最多有一个leader  
+为了保证这点，每个server在每个trem只能投出一票（如果server挂了可能会投出不止一票，所以需要持久化每个server的信息）。  
+同时两个不同的candidate是不可能同时拿到多数选票的。
+2. liveness：某个candidate最终会获胜称为leader
+为了保证系统能向前运行，我们要确保不能一直都是无leader状态，必须要能最终选出一个leader。  
+问题就是我们要确保不要总是
+出现splited vote（投票分散）。即我们不要让多个candidate总是同时开始竞选，这很容易使投票分散；同时开始竞选，然后投票分散，
+无法形成大多数一直，然后等待超时，然后再同时开始竞选。    
+Raft的解决办法是让election timeout分散，不要让所有server的election timeout都相同，
+而是在T到2T之间随机选择超时时间（T就是election timeout）。这样有机器最先超时，
+然后有充足时间在其他server也超时之前发起投票、赢得选举；
+这种办法在T远大于broadcast time（传播时间，指的是server发起投票、收到投票所花时间）的情况下效果明显。
+
+leader选举成功之后的normal operation过程中，leader复制log entries到其他机器：
+1. 每个server都会保存一份自己私有的log
+2. log由entry组成，每个entry都有一个index，用来标记该entry在log中的位置。以及可以在state machine上执行的具体指令command，
+以及识该条entry在哪个term内被创建。因此有：  
+log entry = index, term, command
+3. log必须被持久可靠地保存以防server挂掉，需要保存在磁盘等可靠的存储介质中。
+4. 如果某个entry在集群中大多数server中都有，那么我们认为这条entry是committed的。  
+一旦某条entry被committed，这意味着这条entry可以被安全地交给state machine去执行；raft保证entry是持久存储的，
+并最终被集群中的所有机器都执行。
+
+![](/images/raft/3.png){: width="400px" height="150px"}
+
+## Normal operation
+
+Raft中normal operation的步骤为：
+1. client给leader发送命令command
+2. leader将command存入自己的log中
+3. leader给所有follower发送AppendEntries的rpc请求
+4. 当leader收到了至少一半的server的回复，即认为这条command为committed，则可以执行这条command了。
+  leader在接下来的AppendEntries请求通知所有follower已经committed的entries，然后server再执行已经committed的command。
+5. 如果某个follower挂了：  
+leader会一直不断地重试直到请求成功；即使follower挂了，重启后leader仍会接着发请求直到成功。
+
+当有请求到来，leader只需等到大多数机器有响应即可执行命令并返回结果；
+leader不需要等待所有机器有响应才执行命令，但是leader需要不断发请求给所有机器，
+以确保最终所有机器都有响应，并执行相同的命令。
+
+Raft尽量保证不同server上的log具有高度的一致性:
+
+1. index和term组合起来唯一标识一条entry，即不同server上只要某条entry的index和term相同，则这条entry完全相同。  
+2. 若不同server上的log entries有相同的index和term，那么它们是相同的，并且它们之前的所有log entries也是相同的。  
+也就是说index和term组合起来唯一标识从开始到index位置的整条log.
+3. 如果一个entry是committed，它之前的entries也都是committed.  
+比如：entry 7是committed，意味着entry 7在大多数server上都存在，根据第2条，entry 1到entry 6在那些机器上也一定存在，
+而那些机器已构成大多数，所以entry 1到entry 6也一定已被提交。
+ 
+在AppendEntries中的一致性检查：
+
+上面所说的第2点和第3点，需要加限制条件来实现，即AppendEntries Consistency Check.   
+1. 当leader向follower发送AppendEntries请求的时候，除了要发送新的log entry之外，
+还要额外带上两个值：即新entry的前一个entry的index和term. 
+2. follower收到AppendEntries 请求时，必须先判断自己的log中是否已有相同的
+entry（即是否存在entry与请求中的index和term相同），只有匹配上了才会接受新的entry；如果不匹配，直接拒绝。
+3. 当leader与follower的log不一致时，通过induction step来实现一致。  
+leader为每个follower维护一个nextId，标示下一个要发送的logIndex。follower接收到AppendEntries之后会进行一些一致性检查，
+检查与AppendEntries中指定的lastLogIndex是否一致，如果不一致就会向leader返回失败。leader接收到失败之后，会将nextId减1，
+重新进行发送，直到成功。这个回溯的过程实际上就是寻找follower上最后一个committedId，然后leader发送其后的log entries。
+
+## Safety and consistency after leader changes
+
+当一个新leader的term开始时：
+1. 旧的leader可能只完成了部分server的log复制就挂了，各个server的log很可能是不一致的。
+2. 对于新的leader，没有特殊的步骤，只是进行normal operation.
+3. Raft认为leader上的log总是对的，其他server上的log最终要跟leader保持一致。
+4. 若有多次leader挂掉的情况，可能出现较多不一样的log。
+
+leader的变更过程中需要保证safety和consistency。
+
+### Safety
+
+safty requirement: 一旦某条log entry已经被某一个state machine执行，
+则其他任何state machine也必须执行这同一条log entry.
+
+Raft为了实现safety的要求，采取了如下的特性（safety property）：
+如果一个leader认为某一log entry是committed的，那么这条entry在未来的leaders的log中存在。  
+
+为了实现上面的特性，Raft做到以下几点：
+1. leader不会修改自己log中的entries，只能添加。
+2. 只有leader中的entries才能被committed。
+3. 只有被committed的entries才能被state machine执行。
+
+同时对以下方面做了修改：
+1. 对leader election增加约束：如果某个server的log中缺少某个已committed的entry，则不允许这个server当leader。  
+我们需要挑选最有可能含有所有已提交entry的server做leader，即挑选the best leader（比大部分server的log更完整），方法如下：
+	1. candidate发起的requestVote投票请求包含其log中最后一条entry的index和term
+	2. 当其他server收到投票请求时，需要将收到的(index,term)与自己的相比较，如果认为自己的log更完整（lastLogTerm更新、lastLogIndex更新），则拒绝投票。
+
+2. 改变对committed的定义：已过半即是committed还不够，有时需要延迟committed，直到认为safe了才能committed。  
+下面举例：leader刚刚确定某条entry被committed了（即刚收到来自大多数server的AppendEntries响应），就挂了。
+这种场景可以再分成两种独立case：
+	1. 这条entry属于current term  
+	![](/images/raft/4.png){: width="250px" height="150px"}  
+	如上图所示，S1是term2时期的leader，刚把entry4复制到S2、S3成功，马上宣布entry4已安全（即在大多数server中都有，已被committed），
+	立即在state machine上执行entry4。entry4是已committed的，后续的leader中必须包含这条entry。如果S1此时挂掉，S5不会成为leader，因为
+	它的term比其他server小。S4处于term2，而它最多只能得到S5的投票（其他server也都处于term2，但是log更长，即lastLogIndex更大）。
+	S2和S3都可能成为leader。可以看出最终新leader必定含有已committed的entry。
+
+	2. 这条entry属于prior term  
+	![](/images/raft/5.png){: width="250px" height="150px"}  
+	&nbsp;&nbsp;&nbsp;&nbsp;S1是term2时期的leader，S1刚将entry3复制到S2，就挂掉了，即此时entry3只在S1、S2两个server上有。接着S5发起leader竞选，收到来自S3、S4的投票，
+	成功当选成为term3时期的leader；接着S5收到client请求，在本地log中产生了3条entry，并未复制到其他server上就挂掉了。接着S1再次竞选，
+	成功当选为term4时期的leader；S1成为leader后，会尽力使得其他server的log与之相同，所以会将entry3、entry4复制到其他server上；
+	一旦将entry3复制到server3上，则此时entry3已经形成大多数，即是已被committed了；entry3上的command就会被state machines执行，
+	client就会收到entry3的执行结果。这种场景下entry3并不能认为是safely committed，因为它仍可能被覆盖，仍可能丢失。如下：  
+	&nbsp;&nbsp;&nbsp;&nbsp;S1成为term4时期的leader后，刚在本地产生entry4就挂掉了。而此时，S5可以再次当选，成为term5时期的leader。S5当选leader之后，
+	就会尽力使得其他server的log与之相同，就会把term3时期的entry3、entry4、entry5复制到其他server。那么其他server上的这些entry就被覆盖了。
+	
+	因此新的commitment rule是：
+	1. leader必须看到某条entry存在于过半数的server上
+	2. leader必须看到至少一条来自其current term的entry也存在于过半数server上  
+
+&nbsp;&nbsp;&nbsp;&nbsp;回到前面的case2，接着看新commitment rules是如何保证安全性的：
+	当S1成为term4时期的leader后，它将entry3复制到S3，此时entry3已经存在于过半server上，
+	但是并不能认为entry3是committed的，即并不会将entry3传给state machines执行。必须等到entry4也复制到过半数的机器上，
+	此时才能认为entry3、entry4是committed了。  
+	&nbsp;&nbsp;&nbsp;&nbsp;如果S1复制完成entry3、entry4到大多数server上，即entry3、entry4都已被committed了，此时S1挂掉了。那么显然S4、S5不可能成为新的leader，
+	只有S1、S2、S3有可能成为新leader，而这些server上都有entry3、entry4，所以entry3、entry4是安全的。  
+	&nbsp;&nbsp;&nbsp;&nbsp;如果S1还没将entry3、entry4复制到大多数server上就挂了，S5有可能成为新leader，即意味着entry3、entry4可能会被覆盖，
+	这种情况下entry3、entry4并没被认为是committed的，其命令被没有被state machine执行，client更没有收到其执行结果；
+	这种情况下，entry3、entry4被覆盖而丢失是无关紧要的。我们只保证已committed的entries的safety，并不对未committed的entries的安全性做任何保证。
+	
+## Neutralizing old leaders
+
+可能存在网络隔离或不稳定等因素导致leader暂时性地断网，无法与其他server通信。其余server等待到election timeout，然后选举出新的leader。
+过一段时间后，原先的leader由于网络恢复又加入进来，这时它依然以为自己是leader，并向其余server发心跳。  
+可能有client请求旧leader：旧leader接收到请求，记录到自己的log里，并尝试复制到集群中的其他servers中。若要阻止这种情况，可以使用term，根据term大小
+来识别过期的leader和candidate：
+1. 所有rpc请求都会带上sender的term信息。当receiver收到rpc请求时，会将sender的term与其自身的term相比较，一旦不匹配，过期的一方必须更新term
+2. 如果sender的term更低，说明sender是过期的，此时receiver会立即拒绝该请求。并给sender的response中带上receiver的term信息。使得sender回到follower状态，
+同时更新自己的term。
+3. 如果receiver的term更旧，如果此时receiver不是follower的状态，它也会主动下台，再次回到follower状态，同时更新自己的term。
+
+## Client protocol
+
+1. client给leader发command
+	1. 如果client不知道leader地址，可以发给集群任一server
+	2. 如果收到command的server不是leader，则会转发command给leader
+2. leader在command记录在log里，并committed和应用到leader的state machine之后，才会返回resposne给client
+3. 如果client请求超时（比如leader挂了）：
+	1. client重发请求到其他server
+	2. 请求最终会被server转发给新leader
+	3. client在response中得到新leader的地址之后，便向新leader重试请求。

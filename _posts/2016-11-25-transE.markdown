@@ -1,0 +1,81 @@
+---
+layout: post
+title:  "transE"
+date:   2016-11-25 20:18:02
+categories: MachineLearning
+tags: MachineLearning
+excerpt: transE
+---
+
+# transE
+
+## 相关论文和代码
+[Translating Embeddings for Modeling Multi-relational Data](http://papers.nips.cc/paper/5071-translating-embeddings-for-modeling-multi-relational-data.pdf)  
+[https://github.com/thunlp/KB2E](https://github.com/thunlp/KB2E)
+
+## 一些概念
+
+### (1) embedding
+word embedding（词嵌入）: 给出一个文档，文档就是一个单词序列, 希望对文档中每个不同的单词都得到一个对应的向量(往往是低维向量)表示。
+
+之所以希望把每个单词变成一个向量，目的还是为了方便计算，比如“求单词A的同义词”，就可以通过“求与单词A在cos距离下最相似的向量”来做到。
+
+### (2) multi-relational data
+multi-relational data对应着有向图，结点表示实体(entity)，边表示(head, label, tail)中的label.
+
+三元组(head,label,tail)表示实体head和tail之间存在关系label.
+
+## 论文Motivation
+(1)知识库中分层次的关系很常见，使用translation vector表示关系也很自然。
+
+对于嵌入到二维空间的树节点，兄弟节点组织到x方向同一高度，父节点与子结点组织到y轴。
+null translation vector 对应了相等的实体。
+
+(2)[Distributed Representations of Words and Phrases and their Compositionality](http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf)
+
+从文本中学习到了word embedding,而且可以找到word analogy,即训练出的word embedding可以通过加减法操作，来对应某种关系。
+比如： $$ w(king)-w(queen)\approx w(man)-w(woman) $$
+
+所以可能存在一个embedding space，不同类型实体之间的1对1关系可以用translation来表示。
+
+![](/images/transE/1.png){: width="400px" height="250px"}
+
+## 训练
+
+### cost function
+
+\begin{align}
+\sum_{(h,l,t)\in S} \sum_{(h',l,t')\in S'} [\gamma + d(h+l,t) - d(h'+l, t')]_{+}
+\end{align}
+
+其中$$ d $$ 是计算$$ dissimilarity $$的方法，$$ \gamma > 0，[x]_{+} $$ 表示x的正数部分，
+
+$$ S’_{(h,l,t)}=\{(h',l,t)|h'\in E\} \bigcup \{(h,l,t')|t'\in E\} $$
+表示通过替换头或者尾得到的反例。
+
+可以使用梯度下降来训练。
+
+### algorithm
+input: 训练集$$ S=\{(h,l,t)\} $$，实体集E，关系集L，参数$$ \gamma $$，embedding维数k  
+output: k维的实体和关系向量表示  
+process:  
+(1)初始化E和L，并归一化
+
+(2)  
+LOOP  
+
+1. 采样出一个batch_size的训练样本$$ S_{batch} $$，初始化梯度$$ T_{batch} $$为空集   
+2. for $$ (h,l,t) \in S_{batch} $$ do  
+sample $$ (h',l,t') $$ from $$　S’_{(h,l,t)} $$  
+update $$ T_{batch} $$ to $$ T_{batch} \bigcup \{(h,l,t),(h',l,t')\} $$  
+end for  
+update embeddings ：$$ \sum_{((h,l,t),(h',l,t'))\in T_{batch}} \nabla [\gamma + d(h+l,t)-d(h'+l,t')]_{+} $$  
+
+END LOOP
+
+
+## 参考资料
+[知识图谱——机器大脑中的知识库](http://www.36dsj.com/archives/31317)  
+[词表示模型（一）](http://www.cnblogs.com/Determined22/p/5780305.html)  
+[词表示模型（二）](http://www.cnblogs.com/Determined22/p/5804455.html)  
+[词表示模型（三）](http://www.cnblogs.com/Determined22/p/5807362.html)

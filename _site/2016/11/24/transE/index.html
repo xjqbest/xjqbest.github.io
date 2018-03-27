@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>transE</title>
+    <meta name="description" content="transE">
+
+    <link rel="shortcut icon" href="/favicon.ico?" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico?" type="image/x-icon">
+    <link rel="stylesheet" href=" /css/fontawesome/css/font-awesome.min.css ">
+    <link rel="stylesheet" href=" /css/main.css ">
+    <link rel="canonical" href="http://localhost:4000/2016/11/24/transE/">
+    <link rel="alternate" type="application/rss+xml" title="xujiaqi's blog" href="http://localhost:4000 /feed.xml ">
+
+
+
+</head>
+
+
+  <body>
+
+    <header id="top">
+    <div class="wrapper">
+        <a href="/" class="brand">xujiaqi's blog</a>
+        <small></small>
+        <button id="headerMenu" class="menu"><i class="fa fa-bars"></i></button>
+        <nav id="headerNav">
+            <ul>
+                <li>
+                    
+                    <a href="/">
+                    
+                        <i class="fa fa-home"></i>Home
+                    </a>
+                </li>
+
+                
+                    
+                    <li>
+                        
+                        <a href="/archive/">
+                        
+                            <i class="fa fa-archive"></i>Archives
+                        </a>
+                    </li>
+                    
+                
+                    
+                    <li>
+                        
+                        <a href="/category/">
+                        
+                            <i class="fa fa-th-list"></i>Categories
+                        </a>
+                    </li>
+                    
+                
+                    
+                    <li>
+                        
+                        <a href="/tag/">
+                        
+                            <i class="fa fa-tags"></i>Tags
+                        </a>
+                    </li>
+                    
+                
+                    
+                    <li>
+                        
+                        <a href="/collection/">
+                        
+                            <i class="fa fa-bookmark"></i>Collections
+                        </a>
+                    </li>
+                    
+                
+                    
+                    <li>
+                        
+                        <a href="/about/">
+                        
+                            <i class="fa fa-heart"></i>About
+                        </a>
+                    </li>
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </ul>
+        </nav>
+    </div>
+</header>
+
+
+        <div class="page clearfix" post>
+    <div class="left">
+        <h1>transE</h1>
+        <div class="label">
+
+            <div class="label-card">
+                <i class="fa fa-calendar"></i>2016-11-24
+            </div>
+
+            <div class="label-card">
+                
+            </div>
+
+            <div class="label-card">
+                
+            </div>
+
+            <div class="label-card">
+            
+
+
+<!-- <span class="point">•</span> -->
+<span class="categories">
+  <i class="fa fa-th-list"></i>
+  
+    
+        <a href="/category/#MachineLearning" title="Category: MachineLearning" rel="category">MachineLearning</a>
+    
+  
+
+  <!-- <span class="point">•</span> -->
+</span>
+
+
+            </div>
+
+            <div class="label-card">
+            
+<!-- <span class="point">•</span> -->
+<span class="pageTag">
+  <i class="fa fa-tags"></i>
+  
+    
+        <!--a href="/tag/#MachineLearning" title="Tag: MachineLearning" rel="tag">MachineLearning</a-->
+        <a href="/tag/#MachineLearning" title="Tag: MachineLearning" rel="tag">MachineLearning</a>
+    
+  
+
+</span>
+
+            </div>
+
+        </div>
+        <hr>
+        <article itemscope itemtype="http://schema.org/BlogPosting">
+        <h1 id="transe">transE</h1>
+
+<h2 id="相关论文和代码">相关论文和代码</h2>
+<p><a href="http://nlp.csai.tsinghua.edu.cn/~lzy/publications/aaai2015_transr.pdf">Learning Entity and Relation Embeddings for Knowledge Graph Completion</a></p>
+
+<p><a href="https://github.com/thunlp/KB2E">https://github.com/thunlp/KB2E</a></p>
+
+<h2 id="一些概念">一些概念</h2>
+
+<h3 id="1-embedding">(1) embedding</h3>
+<p>word embedding（词嵌入）: 给出一个文档，文档就是一个单词序列, 希望对文档中每个不同的单词都得到一个对应的向量(往往是低维向量)表示。</p>
+
+<p>之所以希望把每个单词变成一个向量，目的还是为了方便计算，比如“求单词A的同义词”，就可以通过“求与单词A在cos距离下最相似的向量”来做到。</p>
+
+<h3 id="2-multi-relational-data">(2) multi-relational data</h3>
+<p>multi-relational data对应着有向图，结点表示实体(entity)，边表示(head, label, tail)中的label.</p>
+
+<p>三元组(head,label,tail)表示实体head和tail之间存在关系label.</p>
+
+<h2 id="论文motivation">论文Motivation</h2>
+<p>(1)知识库中分层次的关系很常见，使用translation vector表示关系也很自然。</p>
+
+<p>对于嵌入到二维空间的树节点，兄弟节点组织到x方向同一高度，父节点与子结点组织到y轴。
+null translation vector 对应了相等的实体。</p>
+
+<p>(2)<a href="http://papers.nips.cc/paper/5021-distributed-representations-of-words-and-phrases-and-their-compositionality.pdf">Distributed Representations of Words and Phrases and their Compositionality</a></p>
+
+<p>从文本中学习到了word embedding,而且可以找到word analogy,即训练出的word embedding可以通过加减法操作，来对应某种关系。
+比如： <script type="math/tex">w(king)-w(queen)\approx w(man)-w(woman)</script></p>
+
+<p>所以可能存在一个embedding space，不同类型实体之间的1对1关系可以用translation来表示。</p>
+
+<p><img src="/images/transE/1.png" alt="" width="400px" height="250px" /></p>
+
+<h2 id="训练">训练</h2>
+<h3 id="cost-function">cost function</h3>
+
+<p>\begin{align}
+\sum_{(h,l,t)\in S} \sum_{(h’,l,t’)\in S} [\gamma + d(h+l,t) - d(h’+l, t’)]_{+}
+\end{align}</p>
+
+<p>其中<script type="math/tex">d</script> 是计算<script type="math/tex">dissimilarity</script>的方法，<script type="math/tex">\gamma > 0，[x]_{+}</script> 表示x的正数部分，</p>
+
+<p><script type="math/tex">S’_{(h,l,t)}=\{(h',l,t)|h'\in E\} \bigcup \{(h,l,t')|t'\in E\}</script>
+表示通过替换头或者尾得到的反例。</p>
+
+<p>可以使用梯度下降来训练。</p>
+
+<h3 id="algorithm">algorithm</h3>
+<p>input: 训练集<script type="math/tex">S=\{(h,l,t)\}</script>，实体集E，关系集L，参数<script type="math/tex">\gamma</script>，embedding维数k<br />
+output: k维的实体和关系向量表示<br />
+process:<br />
+(1)初始化E和L，并归一化</p>
+
+<p>(2)<br />
+LOOP</p>
+<ol>
+  <li>采样出一个batch_size的训练样本<script type="math/tex">S_{batch}</script>，初始化梯度<script type="math/tex">T_{batch}</script>为空集</li>
+  <li>for <script type="math/tex">(h,l,t) \in S_{batch}</script> do<br />
+sample <script type="math/tex">(h',l,t')</script> from <script type="math/tex">　S’_{(h,l,t)}</script><br />
+update <script type="math/tex">T_{batch}</script> to <script type="math/tex">T_{batch} \bigcup \{(h,l,t),(h',l,t')\}</script><br />
+end for<br />
+update embeddings ：<script type="math/tex">\sum_{((h,l,t),(h',l,t'))\in T_{batch}} \nabla [\gamma + d(h+l,t)-d(h'+l,t')]_{+}</script></li>
+</ol>
+
+<p>END LOOP</p>
+
+<h2 id="参考资料">参考资料</h2>
+<p><a href="http://www.36dsj.com/archives/31317">知识图谱——机器大脑中的知识库</a></p>
+
+<p><a href="http://www.cnblogs.com/Determined22/p/5780305.html">词表示模型（一）</a></p>
+
+<p><a href="http://www.cnblogs.com/Determined22/p/5804455.html">词表示模型（二）</a></p>
+
+<p><a href="http://www.cnblogs.com/Determined22/p/5807362.html">词表示模型（三）</a></p>
+
+        </article>
+        <hr>
+
+        
+        
+            
+            
+                
+                    
+                        
+                        <h2 id="similar_posts">Similar Posts</h2>
+                        <ul>
+                        
+                        <li class="relatedPost">
+                            <a href="http://localhost:4000/2016/11/22/knn/">KNN的实现
+                            
+                            </a>
+                        </li>
+                        
+                        
+                    
+                
+            
+        
+            
+            
+                
+                    
+                
+            
+        
+            
+            
+                
+                    
+                
+            
+        
+        
+            </ul>
+        
+
+        <div class="post-recent">
+    <div class="pre">
+        
+        <p><strong>上一篇</strong> <a href="/2016/11/22/knn/">KNN的实现</a></p>
+        
+    </div>
+    <div class="nex">
+
+        
+    </div>
+</div>
+
+
+        <h2 id="comments"></h2>
+        
+
+
+
+
+
+
+
+
+    </div>
+    <button class="anchor"><i class="fa fa-anchor"></i></button>
+    <div class="right">
+        <div class="wrap">
+
+            <!-- Content -->
+            <div class="side content">
+                <div>
+                    Content
+                </div>
+                <ul id="content-side" class="content-ul">
+                    <li><a href="#similar_posts">Similar Posts</a></li>
+                    <li><a href="#comments">Comments</a></li>
+                </ul>
+            </div>
+            <!-- 其他div框放到这里 -->
+            <!-- <div class="side">bbbb</div> -->
+        </div>
+    </div>
+</div>
+<script>
+/**
+ * target _blank
+ */
+(function() {
+    var aTags = document.querySelectorAll('article a:not([id])')
+    for (var i = 0; i < aTags.length; i++) {
+        aTags[i].setAttribute('target', '_blank')
+    }
+}());
+</script>
+<script src="/js/pageContent.js " charset="utf-8"></script>
+
+
+    <footer class="site-footer">
+
+
+    <div class="wrapper">
+
+        <p class="description">
+            
+        </p>
+        <p class="contact">
+            Contact me at: 
+            <a href="https://github.com/JacksonXu1991" title="GitHub"><i class="fa fa-github" aria-hidden="true"></i></a>         
+        </p>
+        <p>
+            
+        </p>
+        <p class="power">
+            <span>
+               
+            </span>
+            <span>
+                
+            </span>
+        </p>
+    </div>
+</footer>
+<script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+    <div class="back-to-top">
+    <a href="#top" class="scroll">
+        <i class="fa fa-arrow-up" aria-hidden="true"></i>
+    </a>
+</div>
+
+    <script src=" /js/main.js " charset="utf-8"></script>
+    <script src=" /js/scroll.min.js " charset="utf-8"></script>
+	<script type="text/javascript" async
+		src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
+	</script>
+  </body>
+
+</html>

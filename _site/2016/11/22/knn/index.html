@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>KNN的实现</title>
+    <meta name="description" content="KNN的实现">
+
+    <link rel="shortcut icon" href="/favicon.ico?" type="image/x-icon">
+    <link rel="icon" href="/favicon.ico?" type="image/x-icon">
+    <link rel="stylesheet" href=" /css/fontawesome/css/font-awesome.min.css ">
+    <link rel="stylesheet" href=" /css/main.css ">
+    <link rel="canonical" href="http://localhost:4000/2016/11/22/knn/">
+    <link rel="alternate" type="application/rss+xml" title="xujiaqi's blog" href="http://localhost:4000 /feed.xml ">
+
+
+
+</head>
+
+
+  <body>
+
+    <header id="top">
+    <div class="wrapper">
+        <a href="/" class="brand">xujiaqi's blog</a>
+        <small></small>
+        <button id="headerMenu" class="menu"><i class="fa fa-bars"></i></button>
+        <nav id="headerNav">
+            <ul>
+                <li>
+                    
+                    <a href="/">
+                    
+                        <i class="fa fa-home"></i>Home
+                    </a>
+                </li>
+
+                
+                    
+                    <li>
+                        
+                        <a href="/archive/">
+                        
+                            <i class="fa fa-archive"></i>Archives
+                        </a>
+                    </li>
+                    
+                
+                    
+                    <li>
+                        
+                        <a href="/category/">
+                        
+                            <i class="fa fa-th-list"></i>Categories
+                        </a>
+                    </li>
+                    
+                
+                    
+                    <li>
+                        
+                        <a href="/tag/">
+                        
+                            <i class="fa fa-tags"></i>Tags
+                        </a>
+                    </li>
+                    
+                
+                    
+                    <li>
+                        
+                        <a href="/collection/">
+                        
+                            <i class="fa fa-bookmark"></i>Collections
+                        </a>
+                    </li>
+                    
+                
+                    
+                    <li>
+                        
+                        <a href="/about/">
+                        
+                            <i class="fa fa-heart"></i>About
+                        </a>
+                    </li>
+                    
+                
+                    
+                
+                    
+                
+                    
+                
+            </ul>
+        </nav>
+    </div>
+</header>
+
+
+        <div class="page clearfix" post>
+    <div class="left">
+        <h1>KNN的实现</h1>
+        <div class="label">
+
+            <div class="label-card">
+                <i class="fa fa-calendar"></i>2016-11-22
+            </div>
+
+            <div class="label-card">
+                
+            </div>
+
+            <div class="label-card">
+                
+            </div>
+
+            <div class="label-card">
+            
+
+
+<!-- <span class="point">•</span> -->
+<span class="categories">
+  <i class="fa fa-th-list"></i>
+  
+    
+        <a href="/category/#MachineLearning" title="Category: MachineLearning" rel="category">MachineLearning</a>
+    
+  
+
+  <!-- <span class="point">•</span> -->
+</span>
+
+
+            </div>
+
+            <div class="label-card">
+            
+<!-- <span class="point">•</span> -->
+<span class="pageTag">
+  <i class="fa fa-tags"></i>
+  
+    
+        <!--a href="/tag/#MachineLearning" title="Tag: MachineLearning" rel="tag">MachineLearning</a-->
+        <a href="/tag/#MachineLearning" title="Tag: MachineLearning" rel="tag">MachineLearning</a>
+    
+  
+
+</span>
+
+            </div>
+
+        </div>
+        <hr>
+        <article itemscope itemtype="http://schema.org/BlogPosting">
+        <h1 id="accurate-knn">accurate knn</h1>
+<p>在距离空间里，如果一个样本的最接近的k个邻居里，绝大多数属于某个类别，则该样本也属于这个类别。KNN算法中，所选择的邻居都是已经正确分类的对象。该方法只依据最邻近的一个或者几个样本的类别来决定待分样本所属的类别。</p>
+
+<h2 id="k-d-tree">k-d tree</h2>
+
+<h3 id="简介">简介</h3>
+<ol>
+  <li>k-d tree，即K-dimensional tree，是一棵二叉树，树中存储的是一些K维数据。在一个K维数据集合上构建一棵k-d tree代表了对该K维数据集合构成的K维空间的一个划分。</li>
+  <li>在二叉查找树时，一个1维数据根据其与当前结点比较大小来决定是划分到左子树还是右子树。同理，可以将一个K维数据与k-d tree的当前结点进行比较，只不过不是对K维数据进行整体的比较，而是选择某一个维度Di，然后比较两个数在该维度上的大小。即每次选择一个维度Di来对K维数据进行划分，相当于用一个垂直于该维度Di的超平面将K维数据空间一分为二，平面一边的所有K维数据在Di维度上的值小于平面另一边的所有K维数据对应维度上的值。</li>
+</ol>
+
+<h3 id="如何构造k-d-tree">如何构造k-d tree</h3>
+<ol>
+  <li>每次对子空间的划分时，确定在哪个维度上进行划分：
+每次我们选择维度进行划分时，都选择具有最大方差维度,因为更容易在这个维度上将它们划分开。</li>
+  <li>在某个维度上进行划分时，确保在这一维度上的划分得到的两个子集合的数量尽量相等：
+在维度i上进行划分时，pivot就选择该维度i上所有数据的中位数，这样得到的两个子集合数据个数就基本相同了。</li>
+</ol>
+
+<hr />
+<p>经典的构造k-d tree的规则如下：</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>   递归的从根节点不停的划分，直到没有实例：
+       随着树的深度增加，循环的选取坐标轴，作为分割超平面的法向量。
+       每次均为所有对应实例的中位数的实例作为切分点，切分点作为父节点，左右两侧为划分的作为左右两子树。
+</code></pre>
+</div>
+
+<p>2-d tree ：</p>
+
+<p><img src="/images/accurate_knn/1.png" alt="" width="350px" height="200px" /></p>
+
+<h3 id="k-d树的搜索">k-d树的搜索</h3>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>算法：k-d树最邻近查找  
+输入：Kd kd，    //k-d tree类型  
+      target     //查询数据点  
+输出：nearest， //最邻近数据点  
+      dist      //最邻近数据点和查询点间的距离  
+  
+1. If kd为NULL，则设dist为infinite并返回  
+2. //进行二叉查找，生成搜索路径  
+    kd_point = &amp;Kd；                 //kd_point中保存k-d tree根节点地址  
+    nearest = kd_point-&gt;node_data；  //初始化最近邻点  
+    min_dist = dist(nearest, target)
+   While（kd_point != NULL）  
+   　　push（kd_point）到search_path中； //search_path是一个栈，存储着搜索路径节点指针  
+       If min_dist  &gt; dist（Kd_point -&gt; Node_data，target）  
+   　　　　nearest  = kd_point -&gt; Node_data；    //更新最近邻点  
+   　　　　min_dist = dist(kd_point，target）；  //更新最近邻点与查询点间的距离
+       End if
+       s = kd_point-&gt;split；                     //确定待分割的方向  
+   　　If target[s] &lt;= kd_point-&gt;node_data[s]   //进行二叉查找  
+   　　　　kd_point = kd_point-&gt;left；  
+   　　Else  
+   　　　　kd_point = kd_point-&gt;right；  
+       End if
+   End while  
+3. //回溯查找  
+   While（search_path非空）  
+   　　bt_point = search_path.top()；
+       search_path.pop()；
+   　　s = bt_point-&gt;split；//确定分割方向  
+   　　If dist（target[s]，bt_point-&gt;node_data[s]） &lt; min_dist   //判断还需进入的子空间  
+   　　　　If target[s] &lt;= bt_point-&gt;node_data[s]  
+   　　　　　　kd_point = bt_point-&gt;right；  //如果target位于左子空间，就应进入右子空间  
+   　　　　Else  
+   　　　　　　kd_point = bt_point-&gt;left;    //如果target位于右子空间，就应进入左子空间  
+           End if
+   　　　  search_path.push(kd_point)；
+       End if  
+   　　If min_dist &gt; dist（kd_point-&gt;node_data，target）  
+   　　　　nearest  = kd_point-&gt;node_data；                 //更新最近邻点  
+   　　　　min_dist = dist（kd_point-&gt;node_data,target）；  //更新最近邻点与查询点间的距离的  
+       End if
+   End while   
+
+
+</code></pre>
+</div>
+<hr />
+<p>优先检索包含最近邻点可能性较高的空间。
+还可以设置一个运行时间/迭代次数的限制，提前停止。
+在二叉搜索的时候将搜索路径另一侧的分支加入到优先级队列中，供回溯时查找。而优先级队列的排序就是根据目标与分割超平面的距离。</p>
+
+<div class="highlighter-rouge"><pre class="highlight"><code>算法： BBF最近邻查询
+输入：Kd kd，    //k-d tree类型  
+      target     //查询数据点  
+输出：nearest，  //最邻近数据点  
+      dist       //最邻近数据点和查询点间的距离  
+1. If kd是空的，则设dist为无穷大并返回
+2. nearest = kd.node_data；
+   将&amp;kd压入优先级队列pq中；
+   /*建立优先级队列。首先压入根节点，优先级队列中记录的都是k-d树节点，它们都是k-d树节点它们都是需要回溯的树节点，会输这些树节点的优先级取决于它们离查询点的距离，距离越近，优先级越高*/
+   While (pq不为空)
+   /*优先检查这个树节点表示的空间中是否有更好的最邻近*/
+       kd_point = pq.top();//提取优先级最高的节点
+       pq.pop();
+       While (kd_point不为空)
+           s = kd_point-&gt;split;
+           current_data = kd_point-&gt;node_data
+           If min_dist &gt; distance(current_data, target)
+               nearest = current_data 
+               min_dist = distance(current_data, target)
+           End if
+           If target[s] &lt;= kd_point-&gt;node_data[s]
+               kd_point = kd_point-&gt;left
+               pq.push(kd-point-&gt;right)
+           Else
+               kd_point = kd_point-&gt;right
+               pq.push(kd-point-&gt;left)
+           End if
+       End while
+   End while
+           
+</code></pre>
+</div>
+
+<h2 id="vantage-point-tree">vantage-point tree</h2>
+
+<h3 id="简介-1">简介</h3>
+<ol>
+  <li>对于k-d tree, 假设数据集的维数为D，一般来说要求数据的规模N满足N?D，才能达到高效的搜索。所以这就引出了一系列对k-d树算法的改进：BBF算法，和一系列M树、VP树、MVP树等高维空间的搜索的树。</li>
+  <li>k-d tree算法在高维空间中由于过多的回溯次数导致算法查找效率下降。（随着维度K的增大，与target的超球面相交的超矩形（子树分支所在的区域）就会增加，这就意味着需要回溯判断的树分支就会更多，从而算法的查找效率便会下降很大）</li>
+  <li>vp tree与k-d tree相似，使用的是圆(circular)、球（spherical）、超球(spherical)等来划分，而不是k-d tree的线性(rectilinear).</li>
+  <li>vp tree只需要知道如何计算距离即可，不需要关于数据的其他信息。</li>
+</ol>
+
+<p><img src="/images/accurate_knn/2.png" alt="" /></p>
+
+<h3 id="简易的单机实现代码">简易的单机实现代码</h3>
+
+<div class="language-cpp highlighter-rouge"><pre class="highlight"><code><span class="cp">#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;stack&gt;
+#include &lt;queue&gt;
+#include &lt;algorithm&gt;
+</span><span class="k">using</span> <span class="k">namespace</span> <span class="n">std</span><span class="p">;</span>
+ 
+<span class="c1">// 数据点之间的距离
+</span><span class="kt">double</span> <span class="nf">distance</span><span class="p">(</span><span class="k">const</span> <span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&amp;</span> <span class="n">lhs</span><span class="p">,</span> <span class="k">const</span> <span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&amp;</span> <span class="n">rhs</span><span class="p">)</span> <span class="p">{</span>
+    <span class="kt">double</span> <span class="n">result</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span>
+    <span class="k">for</span> <span class="p">(</span><span class="kt">int</span> <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span><span class="p">;</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="n">lhs</span><span class="p">.</span><span class="n">size</span><span class="p">();</span> <span class="o">++</span><span class="n">i</span><span class="p">)</span> <span class="p">{</span>
+        <span class="kt">double</span> <span class="n">tmp</span> <span class="o">=</span> <span class="n">lhs</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">-</span> <span class="n">rhs</span><span class="p">[</span><span class="n">i</span><span class="p">];</span>
+        <span class="n">result</span> <span class="o">+=</span> <span class="n">tmp</span> <span class="o">*</span> <span class="n">tmp</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="k">return</span> <span class="n">sqrt</span><span class="p">(</span><span class="n">result</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="c1">// vp树的树节点
+</span><span class="k">struct</span> <span class="n">Node</span> <span class="p">{</span>
+    <span class="n">Node</span><span class="p">()</span><span class="o">:</span><span class="n">index</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">radius</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">left</span><span class="p">(</span><span class="nb">nullptr</span><span class="p">),</span> <span class="n">right</span><span class="p">(</span><span class="nb">nullptr</span><span class="p">)</span> <span class="p">{</span>
+    <span class="p">}</span>
+    <span class="o">~</span><span class="n">Node</span><span class="p">()</span> <span class="p">{</span>
+        <span class="k">delete</span> <span class="n">left</span><span class="p">;</span>
+        <span class="k">delete</span> <span class="n">right</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="kt">int</span> <span class="n">index</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">center</span><span class="p">;</span>
+    <span class="kt">double</span> <span class="n">radius</span><span class="p">;</span>
+    <span class="n">Node</span><span class="o">*</span> <span class="n">left</span><span class="p">;</span>
+    <span class="n">Node</span><span class="o">*</span> <span class="n">right</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="c1">// 优先级队列中的每个对象
+</span><span class="k">struct</span> <span class="n">HeapItem</span> <span class="p">{</span>
+    <span class="n">HeapItem</span><span class="p">()</span><span class="o">:</span><span class="n">dist</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span> <span class="n">node</span><span class="p">(</span><span class="nb">nullptr</span><span class="p">)</span> <span class="p">{</span>
+    
+    <span class="p">}</span>
+    <span class="o">~</span><span class="n">HeapItem</span><span class="p">()</span> <span class="p">{</span>
+        
+    <span class="p">}</span>
+    <span class="c1">// 最大堆
+</span>    <span class="k">friend</span> <span class="kt">bool</span> <span class="k">operator</span><span class="o">&lt;</span><span class="p">(</span><span class="k">const</span> <span class="n">HeapItem</span><span class="o">&amp;</span><span class="n">lhs</span><span class="p">,</span> <span class="k">const</span> <span class="n">HeapItem</span><span class="o">&amp;</span> <span class="n">rhs</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">lhs</span><span class="p">.</span><span class="n">dist</span> <span class="o">&lt;</span> <span class="n">rhs</span><span class="p">.</span><span class="n">dist</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="kt">double</span> <span class="n">dist</span><span class="p">;</span>
+    <span class="kt">int</span> <span class="n">node</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="c1">// 用于nth_element中对象的比较
+</span><span class="k">struct</span> <span class="n">CMP</span> <span class="p">{</span>
+    <span class="n">CMP</span><span class="p">(</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&amp;</span> <span class="n">c</span><span class="p">)</span> <span class="o">:</span><span class="n">_center</span><span class="p">(</span><span class="n">c</span><span class="p">)</span> <span class="p">{</span>
+    
+    <span class="p">}</span>
+    <span class="kt">bool</span> <span class="k">operator</span><span class="p">()(</span><span class="k">const</span> <span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&amp;</span> <span class="n">lhs</span><span class="p">,</span> <span class="k">const</span> <span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&amp;</span> <span class="n">rhs</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">return</span> <span class="n">distance</span><span class="p">(</span><span class="n">lhs</span><span class="p">,</span> <span class="n">_center</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">distance</span><span class="p">(</span><span class="n">rhs</span><span class="p">,</span> <span class="n">_center</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span> <span class="n">_center</span><span class="p">;</span>
+<span class="p">};</span>
+<span class="c1">// vp树
+</span><span class="k">class</span> <span class="nc">VPTree</span> <span class="p">{</span>
+<span class="k">public</span><span class="o">:</span>
+    <span class="n">VPTree</span><span class="p">()</span> <span class="o">:</span><span class="n">_root</span><span class="p">(</span><span class="nb">nullptr</span><span class="p">),</span> <span class="n">_cur_max</span><span class="p">(</span><span class="mi">0</span><span class="p">),</span><span class="n">_k</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="p">{</span>
+    <span class="p">}</span>
+    <span class="o">~</span><span class="n">VPTree</span><span class="p">()</span> <span class="p">{</span>
+        <span class="n">delete_vptree</span><span class="p">(</span><span class="n">_root</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="c1">// 建树
+</span>    <span class="kt">void</span> <span class="n">build_tree</span><span class="p">(</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;&amp;</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">set_data</span><span class="p">(</span><span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">b</span><span class="p">));</span>
+        <span class="n">build_tree_node</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">_data</span><span class="p">.</span><span class="n">size</span><span class="p">(),</span> <span class="mi">0</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="n">vector</span><span class="o">&lt;</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;</span> <span class="n">query</span><span class="p">(</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;</span> <span class="n">data_node</span><span class="p">)</span> <span class="p">{</span>
+        <span class="c1">// 优先级队列（此处是最大堆）用来存前K小
+</span>        <span class="n">priority_queue</span><span class="o">&lt;</span><span class="n">HeapItem</span><span class="o">&gt;</span> <span class="n">pq</span><span class="p">;</span>
+        <span class="c1">// 栈， “深搜”
+</span>        <span class="n">stack</span><span class="o">&lt;</span><span class="n">Node</span><span class="o">*&gt;</span> <span class="n">path</span><span class="p">;</span>
+        <span class="n">path</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">_root</span><span class="p">);</span>
+        <span class="k">while</span> <span class="p">(</span><span class="o">!</span><span class="n">path</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+            <span class="n">Node</span><span class="o">*</span> <span class="n">cur</span> <span class="o">=</span> <span class="n">path</span><span class="p">.</span><span class="n">top</span><span class="p">();</span>
+            <span class="n">path</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">cur</span> <span class="o">==</span> <span class="nb">nullptr</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">continue</span><span class="p">;</span>
+            <span class="p">}</span>
+            <span class="c1">// target与当前树节点的中心点的距离
+</span>            <span class="kt">double</span> <span class="n">dist_with_center</span> <span class="o">=</span> <span class="n">distance</span><span class="p">(</span><span class="n">_data</span><span class="p">[</span><span class="n">cur</span><span class="o">-&gt;</span><span class="n">center</span><span class="p">],</span> <span class="n">data_node</span><span class="p">);</span>
+            <span class="c1">//  更新优先级队列
+</span>            <span class="k">if</span> <span class="p">(</span><span class="n">pq</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">&lt;</span> <span class="n">_k</span> <span class="o">||</span> <span class="n">dist_with_center</span> <span class="o">&lt;</span> <span class="n">pq</span><span class="p">.</span><span class="n">top</span><span class="p">().</span><span class="n">dist</span><span class="p">)</span> <span class="p">{</span>
+                <span class="n">HeapItem</span> <span class="n">heap_item</span><span class="p">;</span>
+                <span class="n">heap_item</span><span class="p">.</span><span class="n">dist</span> <span class="o">=</span> <span class="n">dist_with_center</span><span class="p">;</span>
+                <span class="n">heap_item</span><span class="p">.</span><span class="n">node</span> <span class="o">=</span> <span class="n">cur</span><span class="o">-&gt;</span><span class="n">center</span><span class="p">;</span>
+                <span class="n">pq</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">heap_item</span><span class="p">);</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">pq</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">&gt;</span> <span class="n">_k</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">pq</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+            <span class="c1">// 剪枝
+</span>            <span class="kt">bool</span> <span class="n">left_prune</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+            <span class="kt">bool</span> <span class="n">right_prune</span> <span class="o">=</span> <span class="nb">false</span><span class="p">;</span>
+            <span class="k">if</span> <span class="p">(</span><span class="n">pq</span><span class="p">.</span><span class="n">size</span><span class="p">()</span> <span class="o">==</span> <span class="n">_k</span><span class="p">)</span> <span class="p">{</span>
+                <span class="kt">double</span> <span class="n">max_dist_in_pq</span> <span class="o">=</span> <span class="n">pq</span><span class="p">.</span><span class="n">top</span><span class="p">().</span><span class="n">dist</span><span class="p">;</span>
+                <span class="c1">// 无需搜左子树
+</span>                <span class="k">if</span> <span class="p">(</span><span class="n">dist_with_center</span> <span class="o">-</span> <span class="n">max_dist_in_pq</span> <span class="o">&gt;=</span> <span class="n">cur</span><span class="o">-&gt;</span><span class="n">radius</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">left_prune</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+                <span class="p">}</span>
+                <span class="c1">// 无需搜右子树
+</span>                <span class="k">if</span> <span class="p">(</span><span class="n">max_dist_in_pq</span> <span class="o">+</span> <span class="n">dist_with_center</span> <span class="o">&lt;=</span> <span class="n">cur</span><span class="o">-&gt;</span><span class="n">radius</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">right_prune</span> <span class="o">=</span> <span class="nb">true</span><span class="p">;</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+            <span class="c1">// 此情况先搜左子树
+</span>            <span class="k">if</span> <span class="p">(</span><span class="n">dist_with_center</span> <span class="o">&lt;=</span> <span class="n">cur</span><span class="o">-&gt;</span><span class="n">radius</span><span class="p">)</span> <span class="p">{</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">right_prune</span> <span class="o">==</span> <span class="nb">false</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">path</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">cur</span><span class="o">-&gt;</span><span class="n">right</span><span class="p">);</span>
+                <span class="p">}</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">left_prune</span> <span class="o">==</span> <span class="nb">false</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">path</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">cur</span><span class="o">-&gt;</span><span class="n">left</span><span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+            <span class="k">else</span> <span class="p">{</span> <span class="c1">// 此情况先搜右子树
+</span>                <span class="k">if</span> <span class="p">(</span><span class="n">left_prune</span> <span class="o">==</span> <span class="nb">false</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">path</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">cur</span><span class="o">-&gt;</span><span class="n">left</span><span class="p">);</span>
+                <span class="p">}</span>
+                <span class="k">if</span> <span class="p">(</span><span class="n">right_prune</span> <span class="o">==</span> <span class="nb">false</span><span class="p">)</span> <span class="p">{</span>
+                    <span class="n">path</span><span class="p">.</span><span class="n">push</span><span class="p">(</span><span class="n">cur</span><span class="o">-&gt;</span><span class="n">right</span><span class="p">);</span>
+                <span class="p">}</span>
+            <span class="p">}</span>
+        <span class="p">}</span>
+        <span class="c1">// 返回结果
+</span>        <span class="n">vector</span><span class="o">&lt;</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;</span> <span class="n">result</span><span class="p">;</span>
+        <span class="k">while</span> <span class="p">(</span><span class="o">!</span><span class="n">pq</span><span class="p">.</span><span class="n">empty</span><span class="p">())</span> <span class="p">{</span>
+            <span class="n">result</span><span class="p">.</span><span class="n">push_back</span><span class="p">(</span><span class="n">_data</span><span class="p">[</span><span class="n">pq</span><span class="p">.</span><span class="n">top</span><span class="p">().</span><span class="n">node</span><span class="p">]);</span>
+            <span class="n">pq</span><span class="p">.</span><span class="n">pop</span><span class="p">();</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">result</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="kt">void</span> <span class="n">set_data</span><span class="p">(</span><span class="n">vector</span><span class="o">&lt;</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;&amp;</span> <span class="n">b</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">vector</span><span class="o">&lt;</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;</span><span class="p">().</span><span class="n">swap</span><span class="p">(</span><span class="n">_data</span><span class="p">);</span>
+        <span class="n">_data</span> <span class="o">=</span> <span class="n">std</span><span class="o">::</span><span class="n">move</span><span class="p">(</span><span class="n">b</span><span class="p">);</span>
+    <span class="p">}</span>
+    <span class="kt">void</span> <span class="n">set_k</span><span class="p">(</span><span class="kt">int</span> <span class="n">k</span><span class="p">)</span> <span class="p">{</span>
+        <span class="n">_k</span> <span class="o">=</span> <span class="n">k</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="k">private</span><span class="o">:</span>
+    <span class="kt">int</span> <span class="n">_k</span><span class="p">;</span>
+    <span class="n">Node</span><span class="o">*</span> <span class="n">_root</span><span class="p">;</span>
+    <span class="kt">double</span> <span class="n">_cur_max</span><span class="p">;</span>
+    <span class="n">vector</span><span class="o">&lt;</span><span class="n">vector</span><span class="o">&lt;</span><span class="kt">double</span><span class="o">&gt;&gt;</span> <span class="n">_data</span><span class="p">;</span> 
+    <span class="c1">// 建立树节点
+</span>    <span class="n">Node</span><span class="o">*</span> <span class="nf">build_tree_node</span><span class="p">(</span><span class="kt">int</span> <span class="n">left</span><span class="p">,</span> <span class="kt">int</span> <span class="n">right</span><span class="p">,</span> <span class="kt">int</span> <span class="n">root_index</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">left</span> <span class="o">==</span> <span class="n">right</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span> <span class="nb">nullptr</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="n">Node</span><span class="o">*</span> <span class="n">cur_node</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Node</span><span class="p">();</span>
+        <span class="n">cur_node</span><span class="o">-&gt;</span><span class="n">index</span> <span class="o">=</span> <span class="n">root_index</span><span class="p">;</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">right</span> <span class="o">-</span> <span class="n">left</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">)</span> <span class="p">{</span>
+            <span class="kt">int</span> <span class="n">median</span> <span class="o">=</span> <span class="n">left</span> <span class="o">+</span> <span class="p">(</span><span class="n">right</span> <span class="o">-</span> <span class="n">left</span><span class="p">)</span> <span class="o">/</span> <span class="mi">2</span><span class="p">;</span>
+            <span class="c1">// 找到中位数
+</span>            <span class="n">nth_element</span><span class="p">(</span><span class="n">_data</span><span class="p">.</span><span class="n">begin</span><span class="p">()</span> <span class="o">+</span> <span class="n">left</span><span class="p">,</span> <span class="n">_data</span><span class="p">.</span><span class="n">begin</span><span class="p">()</span> <span class="o">+</span> <span class="n">median</span><span class="p">,</span> <span class="n">_data</span><span class="p">.</span><span class="n">end</span><span class="p">(),</span><span class="n">CMP</span><span class="p">(</span><span class="n">_data</span><span class="p">[</span><span class="n">left</span><span class="p">]));</span>
+            <span class="c1">// 设置半径
+</span>            <span class="n">cur_node</span><span class="o">-&gt;</span><span class="n">radius</span> <span class="o">=</span> <span class="n">distance</span><span class="p">(</span><span class="o">*</span><span class="n">_data</span><span class="p">.</span><span class="n">begin</span><span class="p">(),</span> <span class="o">*</span><span class="p">(</span><span class="n">_data</span><span class="p">.</span><span class="n">begin</span><span class="p">()</span> <span class="o">+</span> <span class="n">median</span><span class="p">));</span>
+            <span class="c1">// 设置中心点
+</span>            <span class="n">cur_node</span><span class="o">-&gt;</span><span class="n">center</span> <span class="o">=</span> <span class="n">left</span><span class="p">;</span>
+            <span class="c1">// 建立左子树
+</span>            <span class="n">cur_node</span><span class="o">-&gt;</span><span class="n">left</span> <span class="o">=</span> <span class="n">build_tree_node</span><span class="p">(</span><span class="n">left</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">median</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">root_index</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">);</span>
+            <span class="c1">// 建立右子树
+</span>            <span class="n">cur_node</span><span class="o">-&gt;</span><span class="n">right</span> <span class="o">=</span> <span class="n">build_tree_node</span><span class="p">(</span><span class="n">median</span> <span class="o">+</span> <span class="mi">1</span><span class="p">,</span> <span class="n">right</span><span class="p">,</span> <span class="n">root_index</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">2</span><span class="p">);</span>
+        <span class="p">}</span>
+        <span class="k">return</span> <span class="n">cur_node</span><span class="p">;</span>
+    <span class="p">}</span>
+    <span class="kt">void</span> <span class="nf">delete_vptree</span><span class="p">(</span><span class="n">Node</span><span class="o">*</span> <span class="n">r</span><span class="p">)</span> <span class="p">{</span>
+        <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="n">r</span><span class="p">)</span> <span class="p">{</span>
+            <span class="k">return</span><span class="p">;</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">r</span><span class="o">-&gt;</span><span class="n">left</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">delete_vptree</span><span class="p">(</span><span class="n">r</span><span class="o">-&gt;</span><span class="n">left</span><span class="p">);</span>
+        <span class="p">}</span>
+        <span class="k">if</span> <span class="p">(</span><span class="n">r</span><span class="o">-&gt;</span><span class="n">right</span><span class="p">)</span> <span class="p">{</span>
+            <span class="n">delete_vptree</span><span class="p">(</span><span class="n">r</span><span class="o">-&gt;</span><span class="n">right</span><span class="p">);</span>
+        <span class="p">}</span>
+        <span class="k">delete</span> <span class="n">r</span><span class="p">;</span>
+    <span class="p">}</span>
+<span class="p">};</span>
+</code></pre>
+</div>
+
+<h3 id="并行设计">并行设计</h3>
+
+<h4 id="建树">建树</h4>
+<p>建立vp树每个节点的过程可以分为两个大部分：</p>
+
+<ol>
+  <li>建立较上层节点（用到的数据节点较多）</li>
+  <li>建立较下层节点（用到的数据节点较少）</li>
+</ol>
+
+<p>建立较上层节点可以每个机器共同的建立一个一个的树节点：</p>
+
+<ol>
+  <li>每个机器从hdfs上分到一部分数据</li>
+  <li>0号机器取一个数据点作为中心点，并广播给其他机器</li>
+  <li>每个机器计算所有数据点与中心点距离</li>
+  <li>每个机器向table里写数据求得中位数作为半径，把此树节点存入table</li>
+  <li>根据中位数把数据分成两部分作为左右孩子节点的数据</li>
+</ol>
+
+<p>建立较下层节点由于数据量小了，可以每个机器各自建立不同的树节点：</p>
+<ol>
+  <li>每个节点从table中取到存在本地的部分，找到叶子节点</li>
+  <li>继续分割这些叶子节点，得到树节点并存于table中</li>
+</ol>
+
+<h4 id="查询">查询</h4>
+<ol>
+  <li>把查询数据分成batch size大小的block</li>
+  <li>使用map来查询每个block中每个数据点的k临近，<br />
+可以使用优先级队列（最大堆）来查找前k小，同时配合剪枝策略来减少回溯。</li>
+</ol>
+
+<h2 id="参考资料">参考资料</h2>
+<p><a href="http://blog.csdn.net/v_july_v/article/details/8203674">从K近邻算法、距离度量谈到KD树、SIFT+BBF算法</a></p>
+
+<p><a href="http://stevehanov.ca/blog/index.php?id=130">VP trees: A data structure for finding stuff fast</a></p>
+
+<p><a href="https://en.wikipedia.org/wiki/Vantage-point_tree">Vantage-point tree</a></p>
+
+<p><a href="https://my.oschina.net/keyven/blog/221792">Kd Tree算法原理和开源实现代码</a></p>
+
+        </article>
+        <hr>
+
+        
+        
+            
+            
+                
+                    
+                        
+                        <h2 id="similar_posts">Similar Posts</h2>
+                        <ul>
+                        
+                        <li class="relatedPost">
+                            <a href="http://localhost:4000/2016/11/24/transE/">transE
+                            
+                            </a>
+                        </li>
+                        
+                        
+                    
+                
+            
+        
+            
+            
+                
+                    
+                
+            
+        
+            
+            
+                
+                    
+                
+            
+        
+        
+            </ul>
+        
+
+        <div class="post-recent">
+    <div class="pre">
+        
+        <p><strong>上一篇</strong> <a href="/2016/08/26/next-permutation/">Next Permuation的实现</a></p>
+        
+    </div>
+    <div class="nex">
+
+        
+        <p><strong>下一篇</strong> <a href="/2016/11/24/transE/">transE</a></p>
+        
+    </div>
+</div>
+
+
+        <h2 id="comments"></h2>
+        
+
+
+
+
+
+
+
+
+    </div>
+    <button class="anchor"><i class="fa fa-anchor"></i></button>
+    <div class="right">
+        <div class="wrap">
+
+            <!-- Content -->
+            <div class="side content">
+                <div>
+                    Content
+                </div>
+                <ul id="content-side" class="content-ul">
+                    <li><a href="#similar_posts">Similar Posts</a></li>
+                    <li><a href="#comments">Comments</a></li>
+                </ul>
+            </div>
+            <!-- 其他div框放到这里 -->
+            <!-- <div class="side">bbbb</div> -->
+        </div>
+    </div>
+</div>
+<script>
+/**
+ * target _blank
+ */
+(function() {
+    var aTags = document.querySelectorAll('article a:not([id])')
+    for (var i = 0; i < aTags.length; i++) {
+        aTags[i].setAttribute('target', '_blank')
+    }
+}());
+</script>
+<script src="/js/pageContent.js " charset="utf-8"></script>
+
+
+    <footer class="site-footer">
+
+
+    <div class="wrapper">
+
+        <p class="description">
+            
+        </p>
+        <p class="contact">
+            Contact me at: 
+            <a href="https://github.com/JacksonXu1991" title="GitHub"><i class="fa fa-github" aria-hidden="true"></i></a>         
+        </p>
+        <p>
+            
+        </p>
+        <p class="power">
+            <span>
+               
+            </span>
+            <span>
+                
+            </span>
+        </p>
+    </div>
+</footer>
+<script async src="https://dn-lbstatics.qbox.me/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+    <div class="back-to-top">
+    <a href="#top" class="scroll">
+        <i class="fa fa-arrow-up" aria-hidden="true"></i>
+    </a>
+</div>
+
+    <script src=" /js/main.js " charset="utf-8"></script>
+    <script src=" /js/scroll.min.js " charset="utf-8"></script>
+	<script type="text/javascript" async
+		src="//cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-MML-AM_CHTML">
+	</script>
+  </body>
+
+</html>
