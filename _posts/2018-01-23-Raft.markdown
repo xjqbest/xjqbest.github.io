@@ -223,3 +223,56 @@ Raft为了实现safety的要求，采取了如下的特性（safety property）�
 	1. client重发请求到其他server
 	2. 请求最终会被server转发给新leader
 	3. client在response中得到新leader的地址之后，便向新leader重试请求。
+	
+leader可能在执行完某个command，但是还未向client发送结果时挂掉。
+而一旦出现这种情况，client不可能知道这个command到底是否被执行了，所以它会不断重试，
+并最终请求到新leader上，而这会导致该command被执行两次。	
+
+raft的解决思路是：client为每个command生成一个唯一id，并在发送command时候带上该id。  
+（1）当leader记录command时，会将command的id也记录到log entry中；  
+（2）在leader接受command之前，会先检查log中是否有带该id的entry；  
+（3）leader一旦发现log中已有该id的entry，则会忽略这个new command，并将old command的结果返回给client
+（如果此时old command还没执行完，会等待其完成再返回）；
+
+因此，只要client不crash，我们就能实现exactly-once语义，即每个command只会被执行一次。
+	
+	
+## Configuration changes
+
+系统配置指的是组成集群的各个server的信息。如每个server的id、address等。
+这些决定了集群中“大多数”（majority）的组成，而选举leader、commit log entry等都取决于majority vote。	
+我们要支持系统配置变更，因为机器可能宕机，需要用新机器替代老机器；或集群管理员想更改集群的degree of replication。
+
+不能直接修改配置，否则可能出现如下的冲突：
+
+![](/images/raft/6.png){: width="450px" height="200px"} 
+
+Raft采用协同一致性的方式来解决节点的变更，先提交一个包含新老节点结合的Configuration命令，
+当这条消息Commit之后再提交一条只包含新节点的Configuration命令。新老集合中任何一个节点都可以成为Leader，
+这样Leader宕机之后，如果新的Leader没有看到包括新老节点集合的Configuration日志（这条configuration日志在老
+节点集合中没有写到多数），继续以老节点集合组建复制组（老节点集合中收到configuration日志的节点会截断日志）；
+如果新的Leader看到了包括新老节点集合的Configuration日志，将未完成的节点变更流程走完。具体流程如下：
+
+1. 首先对新节点进行CaughtUp追数据
+2. 全部新节点完成CaughtUp之后，向新老集合发送Cold+new命令
+3. 如果新老节点集合多数都应答了Cold+new，就向新老节点集合发送Cnew命令
+4. 如果新节点集合应答了Cnew，完成节点切换
+
+配置改变示意图如下：
+
+![](/images/raft/7.png){: width="420px" height="400px"} 
+
+节点配置变更过程中需要满足如下规则：
+
+1. 新老集合中的任何节点都可能成为Leader
+2. 任何决议都需要新老集合的多数通过
+
+结合上面的流程和状态转移图，如果Cold+new被Commit到新老集合多数的话，即使过程终止，
+新的Leader依然能够看到Cold+new，并继续完成Cnew的流程，最终完成节点变更；
+如果Cold+new没有提交到新老集合多数的话，新的Leader可能看到了Cold+new也可能没有看到，
+如果看到了依然可以完成Cnew的流程，如果没有看到，说明Cold+new在两个集合都没有拿到多数应答，
+重新按照Cold进行集群操作。这里说明一下选主过程，两阶段过程中选主需要新老两个集合都达到多数同意。
+
+
+
+
