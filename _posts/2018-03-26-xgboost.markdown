@@ -185,25 +185,111 @@ offset：表示每行第一个元素在value中的位置
 UpdateOneIter函数更新每一轮的模型。
  
 ```cpp
-//learner.cc
-
-|--UpdateOneIter()
-    // 初始化DMatrix
-    |--learner::LazyInitDMatrix()
-    // 预测训练数据
-    |--learner::PredictRaw()
-    // 根据预测结果来计算一阶导和二阶导
-    |--ObjFunction::GetGradient()
-    // 利用Gradient Boost生成新的树
-    |--GradientBooster::DoBoost()
-```
-调用PredictRaw()函数来预测时，是根据具体的模型来预测的，具体的模型可以是利用回归树作为其弱分类器(gbtree)也可以是线性模型(gblinear)。
-调用GetGradient()函数来计算一阶导、二阶导时，是根据具体的目标函数来计算的，目标函数可以是square loss、logistic loss、softmax等。
-可以看出xgboost的工程实现中，将模型和目标函数分开，更具扩展性。
-模型（model）：how to make prediction y given x
-参数（parameters）：the things we need to learn from data
-目标函数（objective function）：loss on training data + regularization（how complicated the model is）
+// Learner是个抽象类，负责训练和预测，LearnImpl继承了Learner，是具体实现
+// Learner继承了rabit::Serializable，可以保存和读取checkpoint
+class Learner : public rabit::Serializable {
+ public:
+  virtual ~Learner() {}
+  // set configuration from pair iterators.
+  template<typename PairIter>
+  inline void Configure(PairIter begin, PairIter end);
+  // Set the configuration of gradient boosting.
+  virtual void Configure(const std::vector<std::pair<std::string, std::string> >& cfg) = 0;
+  // 初始化模型：Initialize the model using the specified configurations via Configure.
+  virtual void InitModel() = 0;
+  // 读模型load model from stream
+  virtual void Load(dmlc::Stream* fi) = 0;
+  // 保存模型：save model to stream
+  virtual void Save(dmlc::Stream* fo) const = 0;
+  // 训练：update the model for one iteration
+  virtual void UpdateOneIter(int iter, DMatrix* train) = 0;
+  // 评估：evaluate the model for specific iteration using the configured metrics
+  virtual std::string EvalOneIter(int iter,
+                                  const std::vector<DMatrix*>& data_sets,
+                                  const std::vector<std::string>& data_names) = 0;
+  // 预测：get prediction given the model
+  virtual void Predict(DMatrix* data,
+                       bool output_margin,
+                       HostDeviceVector<bst_float> *out_preds,
+                       unsigned ntree_limit = 0,
+                       bool pred_leaf = false,
+                       bool pred_contribs = false,
+                       bool approx_contribs = false,
+                       bool pred_interactions = false) const = 0;
+  // return whether the model allow lazy checkpoint in rabit.
+  bool AllowLazyCheckPoint() const;
+  // dump the model in the requested format
+  std::vector<std::string> DumpModel(const FeatureMap& fmap,
+                                     bool with_stats,
+                                     std::string format) const;
+  // online prediction function, predict score for one instance at a time
+  inline void Predict(const SparseBatch::Inst &inst,
+                      bool output_margin,
+                      HostDeviceVector<bst_float> *out_preds,
+                       unsigned ntree_limit = 0) const;
+  //Create a new instance of learner
+  static Learner* Create(const std::vector<std::shared_ptr<DMatrix> >& cache_data);
+ protected:
+  /*! internal base score of the model */
+  bst_float base_score_;
+  /*! 
+      目标函数。这里的目标函数不包含正则项，正则项在分裂节点时的gain中。
+      softmax、square loss、logic loss、lambda rank等
+  */
+  std::unique_ptr<ObjFunction> obj_;
+  /*! The gradient booster used by the model*/
+  std::unique_ptr<GradientBooster> gbm_;
+  /*! The evaluation metrics used to evaluate the model. */
+  std::vector<std::unique_ptr<Metric> > metrics_;
+};
  
+Learner* Learner::Create(
+    const std::vector<std::shared_ptr<DMatrix> >& cache_data) {
+  return new LearnerImpl(cache_data);
+}
+ 
+void LearnerImpl::UpdateOneIter(int iter, DMatrix* train) override {
+    monitor.Start("UpdateOneIter");
+    CHECK(ModelInitialized())
+        << "Always call InitModel or LoadModel before update";
+    if (tparam.seed_per_iteration || rabit::IsDistributed()) {
+      common::GlobalRandom().seed(tparam.seed * kRandSeedMagic + iter);
+    }
+    // 初始化DMatrix
+    this->LazyInitDMatrix(train);
+    monitor.Start("PredictRaw");
+    // 预测训练数据
+    this->PredictRaw(train, &preds_);
+    monitor.Stop("PredictRaw");
+    monitor.Start("GetGradient");
+    // 根据预测结果来计算一阶导和二阶导
+    obj_->GetGradient(&preds_, train->info(), iter, &gpair_);
+    monitor.Stop("GetGradient");
+    // 利用Gradient Boost生成新的树
+    gbm_->DoBoost(train, &gpair_, obj_.get());
+    monitor.Stop("UpdateOneIter");
+  }
+
+```
+
+调用PredictRaw()函数来预测时，是根据具体的模型来预测的，具体的模型可以是利用回归树作为其弱分类器(gbtree)也可以是线性模型(gblinear)。  
+调用GetGradient()函数来计算一阶导、二阶导时，是根据具体的目标函数来计算的，目标函数可以是square loss、logistic loss、softmax等。  
+可以看出xgboost的工程实现中，将模型和目标函数分开，更具扩展性。  
+模型（model）：how to make prediction y given x  
+参数（parameters）：the things we need to learn from data  
+目标函数（objective function）：loss on training data + regularization（how complicated the model is）  
+ 
+GBTree和GBLinear是GradientBooster的子类，分别对应基于树的模型和线性模型，区别如下：
+```
+Gblinear vs GbTree
+ 
+Boosting is an ensemble meta-algorithm that iteratively trains sequences of weaker base learners.
+gbtree booster uses version of regression tree as a weak learner
+gblinear uses (generalized) linear regression with l1&l2 shrinkage.
+But since it's an additive process, and since linear regression is an additive model itself,
+only the combined linear model coefficients are retained.
+```
+
 再看一下DoBoost函数，对于gbtree，它调用了 BoostNewTrees() 函数。在 BoostNewTrees() 中先初始化了 TreeUpdater 实例，再调用其Update函数生成一棵树。
  
 ```cpp
@@ -394,6 +480,9 @@ void Update(const std::vector<bst_gpair> &gpair, //保存了对应样本实例�
  
 按贪心法精确查找分割的最优特征值通常开销较大，贪心法遍历了每个特征的每个值。近似法可以采用直方图的方法，将每个特征分桶，每个桶存储一个范围内的特征值，“看成同一特征值”。
 可以看作就是步长的差别，精确查找是步长为1的来遍历特征值，直方图法是步长>1的来遍历特征值。
+
+数据按行切分给不同的节点，每个节点保存相同的树结构。对于树的每个叶子节点，对应了一组直方图，每个直方图表示某一特征的各个区间的统计信息。  
+两种得到候选切分点的方法global proposal和local proposal：  glocal proposal分裂每一层都采用同样的候选切分点，local则是每层切分后重新选取候选切分点。
  
 ### 近似算法如何得到候选分裂特征值
  
