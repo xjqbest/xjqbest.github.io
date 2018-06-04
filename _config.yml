@@ -9,7 +9,7 @@
 title: xujiaqi's blog
 brief-intro: 
 baseurl: "" # the subpath of your site, e.g. /blog
-url: "http://jacksonxu1991.github.io" # the base hostname & protocol for your site
+url: "http://xjqbest.github.io" # the base hostname & protocol for your site
 
 permalink: /:year/:month/:day/:title/
 encoding: utf-8
@@ -19,7 +19,7 @@ future: true
 # other links
 twitter_username:  
 facebook_username:  
-github_username:  JacksonXu1991
+github_username:  xjqbest
 email:  
 weibo_username:  
 zhihu_username:  
