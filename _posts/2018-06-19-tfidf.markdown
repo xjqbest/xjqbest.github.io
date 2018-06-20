@@ -1,0 +1,40 @@
+---    
+layout: post
+title:  "TF-IDF"
+date:   2018-06-19 12:00:00
+categories: MachineLearning
+tags: MachineLearning
+excerpt: 
+---
+
+## 简介
+
+tf-idf是term frequency–inverse document frequency的简写，
+用来衡量一个单词对语料库中一篇文档的重要性。
+
+它的值随着此单词在这篇文档中出现的次数的增加而增大，并且随着此单词在语料库中出现的次数的增加而减小。
+
+tf-idf可以被用来根据用户的查询而对对文档的相关程度排序，在文本的摘要和分类中过滤掉停用词等等。
+
+### tf的计算
+
+<img src="/images/tfidf/1.png" width="40%" height="40%">
+
+其中本文采用的是raw frequency，即此单词在此文档中出现的次数。
+
+### idf的计算
+
+<img src="/images/tfidf/2.png" width="50%" height="50%">
+
+本文采用的是<img src="/images/tfidf/3.png" width="50%" height="50%">，
+即出现该单词的文档总数除以当前文档中该单词的tf值，加1是避免
+
+## 分布式实现
+
+（1）首先使用map计算出每个文档中每个单词的tf值
+
+（2）再使用一个map把每个文档拆成若干不重复的<单词， 1>对
+
+（3）将<单词，1>对进行相同key的value相加，从而得到<单词, 个数>对
+
+（4）现在有了每个单词的tf和idf值，就可以计算tf-idf值了
