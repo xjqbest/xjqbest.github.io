@@ -130,18 +130,42 @@ $$ E[g^2]_{t} = \gamma E[g^2]_{t-1} + (1 - \gamma) g^2_{t} $$
 
 $$ \theta_{i,t+1} = \theta_{i,t} - \dfrac{\eta}{\sqrt{E[g^2]_{t} + \epsilon}} \cdot g_{i,t} $$
 
-以上式子有个问题是更新的单位与前几种方法不同（可以假设参数单位是m，梯度即m/s，然后带入式子看一下），因此改写E为如下式子,
+以上式子有个问题是更新的单位与前几种方法一样，都是$$ \Delta \theta$$与$$ \theta $$（可以假设参数单位是m，梯度即m/s，然后带入式子看一下），因此改写E为如下式子,
 即不再是梯度的平方和，而是参数的平方和
 
 $$ E[\Delta \theta^2]_{t} = \gamma E[\Delta \theta^2]_{t-1} + (1 - \gamma) \Delta \theta^2_{t} $$
 
-记$$ {RMS[\Delta \theta]}_{t} = \sqrt {E[\Delta \theta^2]_t + \epsilon} $$，那么更新参数的公式如下：
+记$$ {RMS[\Delta \theta]}_{t} = \sqrt {E[\Delta \theta^2]_t + \epsilon} $$，
+以及$$ {RMS[g]}_{t} = \sqrt {E[g^2]_t + \epsilon} $$那么更新参数的公式如下：
 
+$$ \Delta \theta = - \dfrac{RMS[\Delta \theta]_{t-1}}{\sqrt {RMS[g]_t}} \cdot {g_{i,t}} $$
 
+$$ \theta_{i,t+1} = \theta_{i,t} - \Delta \theta_t $$
+
+可以看出Adadelta不需要设置学习率了。
+
+### Adam
+
+在我看来就是结合了momentum以及每个参数单独更新，并且优化了起始时参数初始化为0，
+而由于momentum中的$$ \gamma $$(下面公式的$$ \beta_1 $$、$$ \beta_2 $$)通常设置的较大，使得参数超0偏倚的比较厉害的情况。
 
 \begin{align}
-\Delta \theta_t &= - \dfrac {RMS[\Delta \theta]}_{t-1} {\sqrt {RMS[g]}_{t}} \cdot g_{i,t} \\\
-\theta_{i,t+1} &= \theta_{i,t} - \Delta \theta_t
+m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \\\
+G_t &= \beta_2 G_{t-1} + (1 - \beta_2) g_t^2  
 \end{align}
+
+其中$$ m_t $$是第t次更新后的参数m，$$ v_t $$是第t次更新后的参数梯度平方和。
+
+如下这样一除，也就解决了上面说的起始一段时间参数趋于0的情况：
+
+$$ \hat m_t = \dfrac{m_t}{1 - \beta_1} $$
+
+$$ \hat G_t = \dfrac{G_t}{1 - \beta_2} $$
+
+那么更新参数公式为：
+
+$$ \theta_{t+1} = \theta_{t} - \dfrac{\eta}{\sqrt{\hat{G}_t} + \epsilon} \hat{m}_t $$
+
+通常设置$$ \beta_1 $$为0.9，$$ \beta_2 $$为0.999，$$ \epsilon $$为1e-8，
 
 ## pserver如何更新参数呢
