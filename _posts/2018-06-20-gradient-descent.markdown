@@ -147,7 +147,7 @@ $$ \theta_{i,t+1} = \theta_{i,t} - \Delta \theta_t $$
 ### Adam
 
 在我看来就是结合了momentum以及每个参数单独更新，并且优化了起始时参数初始化为0，
-而由于momentum中的$$ \gamma $$(下面公式的$$ \beta_1 $$、$$ \beta_2 $$)通常设置的较大，使得参数超0偏倚的比较厉害的情况。
+而由于momentum中的$$ \gamma $$(下面公式的$$ \beta_1 $$、$$ \beta_2 $$)通常设置的较大，使得参数朝0偏倚的比较厉害的情况。
 
 \begin{align}
 m_t &= \beta_1 m_{t-1} + (1 - \beta_1) g_t \\\
@@ -168,4 +168,37 @@ $$ \theta_{t+1} = \theta_{t} - \dfrac{\eta}{\sqrt{\hat{G}_t} + \epsilon} \hat{m}
 
 通常设置$$ \beta_1 $$为0.9，$$ \beta_2 $$为0.999，$$ \epsilon $$为1e-8，
 
-## pserver如何更新参数呢
+## pserver如何更新参数
+
+在pserver框架中通常采用mini-batch的方式来更新梯度。对于异步的控制，有三种方式：  
+1. BSP（Bulk Synchronous Parallel）  
+在每一轮迭代中都需要等待所有的worker计算完成，优点是每一轮迭代收敛质量高，缺点是存在慢节点的问题。
+2. SSP（Stalness Synchronous Parallel）  
+允许一定程度的worker进度不一致，但这个不一致有一个上限，我们称之为 staleness 值，
+即最快的worker最多领先最慢的worker staleness 轮迭代。  
+优点是一定程度减少了worker之间的等待时间，缺点是每一轮迭代的收敛质量不如BSP，达到同样的收敛效果可能需要更多轮的迭代。
+3. ASP（Asynchronous Parallel）  
+worker之间完全不用相互等待，先完成的worker，继续下一轮的训练。  
+优点是速度快，缺点是适用性差，在一些情况下并不能保证收敛性。
+
+截一张angel的图：
+
+<img src="/images/gd/1.png" width="90%" height="90%">
+
+我们再看一下kunpeng的实现：
+
+图中的mServerParam和mServerGrad对应servers上的模型参数和梯度，
+mWorkerParam和mWorkerGrad对应workers本地的模型参数和梯度，
+mSubDatasetPtr对应当前worker的数据子集。nSync为最大延迟迭代次数，
+nPull和nPush分别为从servers获取最新参数和将梯度发送给servers的频率。
+
+通过设置nSync可以很方便地在BSP和SSP之间切换，而去除SyncBarrier就成了ASP算法的实现。
+
+<img src="/images/gd/2.png" width="50%" height="50%">
+
+## 参考资料
+
+[An overview of gradient descent optimization algorithms](http://ruder.io/optimizing-gradient-descent/index.html)
+
+[https://github.com/Tencent/angel](https://github.com/Tencent/angel)
+
