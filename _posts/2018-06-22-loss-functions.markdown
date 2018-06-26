@@ -56,6 +56,15 @@ H(p,q) &=-\sum\limits_i p_i log{q_i} \\\
 
 其中p是交叉熵中的真实label分布，q是当前模型的预测值的分布。
 
+### Softmax
+
+在Softmax回归中将样本x分类为类别j的概率为
+
+<img src="/images/loss_func/3.png" width="25%" height="25%">
+
+当类别数k = 2 时，softmax退化为逻辑回归
+
+
 ### 正则项
 
 再简单说一下正则项：
@@ -96,3 +105,5 @@ L1优点是能获取稀疏的模型，缺点是加入L1后目标函数在原点�
 [https://blog.csdn.net/u012162613/article/details/44261657](https://blog.csdn.net/u012162613/article/details/4426165)
 
 [https://liam0205.me/2017/03/30/L1-and-L2-regularizer/](https://liam0205.me/2017/03/30/L1-and-L2-regularizer/)
+
+[]()
