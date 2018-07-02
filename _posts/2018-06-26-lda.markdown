@@ -233,8 +233,46 @@ LDA的目的是找出每个词潜在的主题，即求$$ p(\vec{z} $$ \| $$ \vec
 结合Gibbs Sampling的思想，所以我们选取其完全条件概率$$ p(z_i|\vec{z}_{-i},\vec{w}) $$
 
 
-## 2.4 文档集的联合概率分布$$ p(\vec{w},\vec{z}) $$
+### 2.3.1 文档集的联合概率分布$$ p(\vec{w},\vec{z}) $$
 
-$$ p(\vec{w},\vec{z})=p(\vec{w}|\vec{z})p(\vec{z})) $$
+$$ p(\vec{w},\vec{z})=p(\vec{w}|\vec{z})p(\vec{z}) $$
 
+由于主题多项式分布和词表多项式分布的参数是从狄利克雷分布$$ \alpha $$ 和 $$ \beta $$中获得，所以有如下式子：
+
+$$ p(\vec{w},\vec{z}|\vec{\alpha},\vec{\beta})=p(\vec{w}|\vec{z},\vec{\beta})p(\vec{z}|\vec{\alpha}) $$
+
+我们分别看这两个部分
+
+#### 2.3.1.1 $$ p(\vec{w} \vert \vec{z},\vec{\beta}) $$
+
+我们将$$ p(\vec{w} \vert \vec{z},\vec{\beta}) $$拆成两部分，即：
+
+\begin{align}
+p(\vec{w} \vert \vec{z},\vec{\beta}) = \int {p(\vec{w} \vert \vec{z},\phi) * p(\phi \vert \vec{\beta}) d\phi}
+\end{align}
+
+先计算$$ p(\vec{w} \vert \vec{z},\phi) $$，以下按每个主题以及词表中每个词整理，
+其中$$ n_{k,t} $$是整个文档集中，词表第t个单词在主题k中出现的次数（或者词表第t个单词属于主题k中的单词个数）：
+
+\begin{align}
+p(\vec{w} \vert \vec{z},\phi) = \prod_{k=1}^K \prod_{t=1}^V \phi_{k,t}^{n_{k,t}}
+\end{align}
+
+再计算$$ p(\phi \vert \vec{\beta}) $$，即是狄利克雷分布的概率：
+
+\begin{align}
+p(\phi \vert \vec{\beta}) &= \prod_{k=1}^K p(\vec{\phi_k} \vert \vec{\beta}) \\\
+&= \prod_{k=1}^K \frac{\prod_{t=1}^V \phi_{k,t}^{\beta_{t}-1}}{B(\vec{\beta})}
+\end{align}
+
+所以有：
+
+\begin{align}
+p(\vec{w} \vert \vec{z},\vec{\beta}) &=  \int {p(\vec{w} \vert \vec{z},\phi) * p(\phi \vert \vec{\beta}) d\phi} \\\
+&= \int {( \prod_{k=1}^K \prod_{t=1}^V \phi_{k,t}^{n_{k,t}} * \prod_{k=1}^K \frac{\prod_{t=1}^V \phi_{k,t}^{\beta_{t}-1}}{B(\vec{\beta})} ) d\phi } \\\
+&= \prod_{k=1}^K  \frac {1}{B(\vec \beta)}  \int {( \prod_{t=1}^V \phi_{k,t}^{n_{k,t}+\beta_t-1})d\phi} \\\
+&= \prod_{k=1}^K \frac {B(\vec n_k + \vec \beta)}{B(\vec \beta)} 
+\end{align} 
+
+其中$$ \vec n_k = (n_{k,1},n_{k,2},\dots,n_{k,V}) $$，$$ n_{k,t} $$表示文档集中，第k个主题对应的单词t的个数。
 
