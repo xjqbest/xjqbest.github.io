@@ -41,7 +41,7 @@ CMD ["executable","param1","param2"]
 2. CMD ["param1","param2"] （作为 ENTRYPOINT 指令参数）
 3. CMD command param1 param2 （shell 格式，默认 /bin/sh -c），使用 shell 格式之后，程序会以 /bin/sh -c 的子命令启动，并且 shell 格式下不会传递任何信号给程序。
 
-### 2.3.2 容器入口脚本
+#### 2.3.2 容器入口脚本
 
 在容器中使用自定义bash脚本作为容器入口，脚本中使用后台方式执行具体应用的命令，然后使用内建wait阻塞。需要注意进程处理信号的限制：只有当进程阻塞在内建命令时才可以响应SIG信号，否则会一直等待子进程退出后再处理。
 
