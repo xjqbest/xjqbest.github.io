@@ -1,0 +1,240 @@
+---    
+layout: post
+title:  "LDA"
+date:   2018-06-26 11:00:00
+categories: MachineLearning
+tags: MachineLearning
+excerpt: 
+---
+
+# 1. 简介
+
+LDA全称Latent Dirichlet Allocation，属于无监督学习，可以求出语料库的潜在的主题信息。
+作用是将文档集中每篇文档的主题以概率分布的形式给出。
+
+## 1.0 一些名字解释
+
+|名词|含义|
+|文档|LDA是词袋（bag of words）模型。将文档看作是是一组词，词与词之间没有先后顺序。|
+|文档集|所有文档的集合。本文设一共M个文档|
+|词|英文单词或者中文句子分词后得到的单词|
+|词表|文档集所有词的集合（不重复）。本文设一共V个词|
+|主题|主题表现为相关一些词的分布，可以用V维的词表向量来表示主题k，向量的第i个元素表示的就是word i在该主题k下的概率|
+|词表分布|每个主题对应的词的分布|
+|主题分布|每篇文档的主题的分布。本文设一共K个主题，那么主题分布可以用$$ M * K $$的矩阵表示|
+
+## 1.1 LDA的输出
+
+LDA从生成模型的角度来看待文档和主题。
+
+通常写文章的步骤如下：  
+1. 选择一些相关的主题
+2. 根据所选的主题遣词造句
+
+在LDA中，一篇文档的生成方式如下：  
+1. 从狄利克雷分布$$ \theta $$中取样生成文档i的主题分布$$ \theta_i $$
+2. 从狄利克雷分布$$ \phi $$中取样生成每个主题k的词表分布$$ \phi_k $$
+3. 对于文档$$ i $$中每个位置$$ j $$，首先从$$ \theta_i $$采样生成主题$$ k_{ij} $$，
+然后从词表分布$$ \phi_{k_{ij}} $$生成词$$ w_{ij} $$ 
+
+LDA求出的结果即为两个矩阵$$ \theta $$和$$ \phi $$：
+
+|矩阵符号|维度|含义|
+|$$ \theta $$|$$ M * K $$|M篇文档，每篇文档K个主题|
+|$$ \phi $$|$$ K * V $$|K个主题，每个主题对应的词的分布|
+
+## 1.2 数学基础
+
+### 1.2.1 Gamma函数
+
+$$ \Gamma(x)=\int_0^{+\infty}e^{-t}t^{x-1}dt(x>0) $$. 
+Gamma函数是阶乘的一般形式，将阶乘从正整数域拓展到正实数域。有如下性质：  
+
+$$ \Gamma(x+1)=x\Gamma(x) $$  
+
+$$ \Gamma(n)=(n-1)! $$
+
+### 1.2.2 二项分布
+
+重复了n次的伯努利分布，其概率密度函数为$$ P(K=k)=\binom{n}{k}p^k(1-p)^{n-k} $$
+
+### 1.2.3 Beta分布
+
+定义在区间上的连续概率分布有两个参数$$ alpha $$和$$ \beta $$，其概率密度函数为  
+
+$$ f(p;\alpha,\beta)=\frac{p^{\alpha-1}(1-p)^{\beta-1}}{\int_0^1u^{\alpha-1}(1-u)^{\beta-1}du} $$
+
+通常将分母记作$$ B(\alpha, \beta) = \int_0^1u^{\alpha-1}(1-u)^{\beta-1}du = \frac{\Gamma(\alpha)\Gamma(\beta)}{\Gamma(\alpha+\beta)}$$
+
+期望$$ E(p) = \frac{\alpha}{\alpha+\beta} $$
+
+### 1.2.4 多项式分布
+
+设$$ A_1,A_2,\dots,A_n $$为某一试验的完备事件群，即事件两两互斥，其和为完备事件群。 
+其中$$ A_1,A_2,\dots,A_n $$的概率分别是$$ p_1,p_2,\dots,p_n $$。 
+将该事件独立地重复N次，以$$ X_i $$记为这N次试验中事件$$ A_i $$ 出现的次数，则$$ X=(X_1,X_2,...,X_n) $$是一个维随机向量（$$ X_i $$的取值范围为都是非负整数，且和为N).
+多维随机变量的概率分布即为多项分布： 
+
+$$ P(x_1,x_2,...,x_k;n,p_1,p_2,...,p_k)=\frac{n!}{x_1!...x_k!}p_1^{x_1}...p_k^{x_k} $$
+
+多项分布是二项分布在多维变量上的推广。
+
+LDA中的主题分布$$ \theta $$和$$ \phi $$就是多项式分布。
+
+设文档i长度为L，每个位置是从多项式分布中抽取一个主题，那么文档i的主题服从多项式分布$$Multi(L;\theta_{i1},\theta_{i2}\dots\theta_{iK}) $$，
+即是对该文档每个位置选择主题。（可以看出我们关注的是发生的次数而考虑顺序，因此是词袋模型。下同。）
+
+设L个位置中有$$ L_k $$个位置是从主题k中获取词，那么文档i中从主题k抽取词服从$$ Multi(L_k;\phi_{k1},\phi_{k2}\dots\phi_{kV}) $$
+
+### 1.2.5 狄利克雷分布（Dirichlet）
+
+Dirichlet分布是beta分布在多维变量上的推广。
+
+$$ f(p_1,p_2\cdots x_k;\alpha_1,\alpha_2\cdots \alpha_k)=\frac{1}{B(\alpha)}\prod_{i=1}^kx_i^{\alpha^i-1} $$
+
+其中
+
+$$ B(\alpha)=\frac{\prod_{i=1}^k\Gamma(\alpha^i)}{\Gamma(\sum_{i=1}^k\alpha^i)} $$
+
+
+### 1.2.6 共轭先验分布
+
+贝叶斯公式如下：
+
+$$ p(\theta|x)=\frac{p(x|\theta)p(\theta)}{p(x)}=\frac{p(x|\theta)p(\theta)}{\int p(x|\theta)p(\theta)d\theta}\propto p(x|\theta)p(\theta) $$ 
+
+其中$$ \theta $$表示参数，x是观测到的数据。即有后验分布$$ \propto $$似然函数 * 先验分布。
+
+如果先验分布和似然函数可以使得先验分布和后验分布具有相同的形式，则称先验分布是似然函数的共轭先验分布。
+
+下面有几个结论
+
+#### （1） Beta分布是二项式分布的共轭先验分布
+
+证明:  
+1. P(s \| p)是似然函数，p是二项分布的参数，则似然函数为$$ \binom{s+f}{s}p^s(1-p)^f $$，其中s+f=n  
+
+2. 先验分布P($$ p $$)是beta分布，参数为$$ \alpha $$ 和 $$ \beta $$，则有$$ P(p|\alpha,\beta)=\frac{p^{\alpha-1}(1-p)^{\beta-1}}{B(\alpha,\beta)} $$  
+其中$$ B(\alpha,\beta)=\frac{\Gamma(\alpha)\Gamma(\beta)}{\Gamma(\alpha+\beta)} $$
+
+3. 那么：
+\begin{align}
+P(p|s,f,\alpha,\beta)&=\frac{\binom{s+f}{s}p^s(1-p)^f\frac{p^{\alpha-1}(1-p)^{\beta-1}}{B(\alpha,\beta)}}{\int_{q=0}^1\binom{s+f}{s}p^s(1-p)^f\frac{p^{\alpha-1}(1-p)^{\beta-1}}{B(\alpha,\beta)}dq} \\\ 
+&= \frac{p^{s+\alpha-1}(1-p)^{f+\beta-1}}{\int_{q=0}^1p^{s+\alpha-1}(1-p)^{f+\beta-1}dq} \\\
+&= \frac{p^{s+\alpha-1}(1-p)^{f+\beta-1}}{B(s+\alpha,f+\beta)}
+\end{align}
+
+先验分布是$$ X\sim Beta(\alpha,\beta) $$，后验分布则是$$ X\sim Beta(\alpha+s, \beta+f) $$。 
+超参数$$ \alpha $$ 和 $$ \beta $$在基于观测到的数据和后发生了改变，
+变成了$$ \alpha + s $$ 和 $$ \beta + f $$，但形式上仍然是beta分布。 
+
+#### （2） Dirichlet分布是多项式分布的共轭先验分布
+
+先验分布是$$ Dir(\vec{p} $$ \| $$ \vec{a}) $$，后验分布就变成了$$ Dir(\vec{p} $$ \| $$ \vec{\alpha}+\vec{x}) $$。 
+
+$$ \vec{p},\vec{\alpha},\vec{x} $$这三个向量维度相同。
+
+我们可以用Dirichlet分布随机变量的期望来估计多项式分布的参数。 
+
+Dirichlet分布的期望公式如下：
+
+$$ E(\vec{p})=(\frac{\alpha_1}{\sum_{i=1}^K\alpha_i},\frac{\alpha_2}{\sum_{i=1}^K\alpha_i} \dots \frac{\alpha_K}{\sum_{i=1}^K\alpha_i}) $$ 
+
+
+## 1.3 LDA的目的
+
+LDA的目的是找出每个词潜在的主题，即求$$ p(\vec{z} $$ \| $$ \vec{w}) $$。
+
+其中$$ \vec w $$是文档集中的词向量，$$ \vec z $$是文档集中与词向量所对应的每个主题值。 
+
+### 1.3.1 举例
+
+例如，如果对于文档集，只有一个文档，该文档分词后有5个词，"aaa bbb ccc ddd aaa"。  
+
+然后我们要从文档集中提取出来3个主题$$ topic0, topic1, topic2 $$。 
+
+词"aaa"被赋予的隐含主题为$$ topic0 $$，
+词"bbb"被赋予的隐含主题为$$ topic2 $$，
+词"ccc"被赋予的隐含主题为$$ topic0 $$，
+词"ddd"被赋予的隐含主题为$$ topic1 $$。 
+
+则有$$ \vec{w}=(aaa,bbb,ccc,ddd,aaa), \vec{z}=(topic0，topic2,topic0,topic1,topic0) $$，
+$$ \vec{w} $$和 $$ \vec{z} $$的维度都是整个文档集中词的个数（重复词不合并）。
+
+
+我们要求的是
+
+$$ p(\vec{z} | \vec{w})=\frac{p(\vec{w},\vec{z})}{p(\vec{w})} $$
+
+其中分母为
+
+$$ p(\vec{w})=\sum_zp(\vec{w},\vec{z})=\prod_{i=1}^n\sum_{k=1}^Kp(w_i|z_i=k)p(z_i=k) $$
+
+其中n是文档集中所有词的个数，即是$$ \vec{w} $$和$$ \vec{z} $$的维度（对于上面的例子，n=5），
+K是所要提取的隐含主题数（对于上面的例子，K=3）。
+
+分母的计算时间复杂度为$$ K^n $$，难以计算，因此采用吉布斯采样的方法。
+
+# 2 Gibbs Sampling吉布斯采样
+
+## 2.1 Markov Chain马尔科夫链
+
+马尔科夫链即根据转移矩阵去转移的随机过程（马尔科夫过程）。
+
+<img src="/images/lda/1.png" width="25%" height="25%">
+
+该状态转移图的转移矩阵如下图所示：
+
+<img src="/images/lda/2.png" width="25%" height="25%">
+
+i,j,k,l表示的马尔科夫链上的状态，使用向量$$ \pi=(p_i,p_j,p_k,p_l) $$表示当前所处的状态，每个元素表示处于该状态的概率。
+
+有一种情况，即向量$$ \pi $$在经过大量的转移后达到一个稳定状态，之后即使再怎么转移$$ \pi $$的值也不会改变了，此时即成为平稳状态分布。
+
+要达到这个平稳状态分布需要满足一些条件，即$$ \pi P=\pi $$(也即$$ \pi_iP_{ij}=\pi_jP_{ji} $$，这两个条件等价)。 
+
+$$ \pi $$是一个概率分布，我们构造出某个马尔科夫链（即转移矩阵）使得收敛到平稳状态分布后采样出来的结果满足这个概率分布。 
+
+即是：如果我们想求某个概率分布$$ P(X) $$的话，我们就可以构造一个马尔科夫链来使得最终平稳状态分布就是概率分布$$ P(X) $$，
+从而在无需明显求出$$ P(X) $$表达式的情况下获取其采样结果。
+
+## 2.2 Metropolis-Hasting算法
+
+MH算法目的：根据一个需求的概率分布$$ P(X) $$生成（采样）一系列的样本状态点。
+
+对于平稳状态分布的条件，有： $$ P(x)p(x->x')=P(x')p(x'->x) $$
+
+将转移概率$$ p(x->x') $$分解为建议概率$$ g(x->x') $$和接受概率$$ A(x->x') $$
+
+整理得到接受率$$ \alpha $$：
+
+$$ \alpha=\frac{A(x->x')}{A(x'->x)}=\frac{P(x')}{P(x)}\frac{g(x'->x)}{g(x->x')} $$
+
+如果它大于等于1，就说明下次要转移的状态x'比当前状态x可能性更大，那么我们就按照建议概率g转移到x'；如果小于1，则以$$ \alpha $$为概率接受这次转移。
+
+<img src="/images/lda/3.png" width="57%" height="57%">
+
+## 2.3 Gibbs Sampling算法
+
+MH默认的流程是任意选择转移概率g(x)，然后利用接受率$$ \alpha $$来使得采样最终收敛于P(x)。
+但是如果我选择足够好的g(x)，使得每次发出的建议都是符合分布P(x)的建议，那么我就一直接受就行了(此时即接受率恒为1)。Gibbs Sampling采用的就是这种方式。
+
+对于多维随机变量的概率分布p(x)而言，选择完全条件概率full conditionals作为建议概率
+
+$$ p(x_j|x_{-j})=p(x_j|x_1,\dots,x_{j-1},x_{j+1},\dots,x_n)=\frac{p(x_1,\dots,x_n)}{p(x_1,\dots ,x_{j-1},x_{j+1},\dots,x_n)} $$
+
+对于多维随机变量的概率分布而言，一旦其完全条件概率full conditionals可用，则可以采用维向量轮流每个维度循环的方式来迭代达到平衡。 
+
+<img src="/images/lda/4.png" width="57%" height="57%">
+
+为了得到完全条件概率，我们需要求出联合概率分布。
+
+LDA的目的是找出每个词潜在的主题，即求$$ p(\vec{z} $$ \| $$ \vec{w}) $$。
+结合Gibbs Sampling的思想，所以我们选取其完全条件概率$$ p(z_i|\vec{z}_{-i},\vec{w}) $$
+
+
+## 2.4 文档集的联合概率分布$$ p(\vec{w},\vec{z}) $$
+
+$$ p(\vec{w},\vec{z})=p(\vec{w}|\vec{z})p(\vec{z})) $$
+
+
