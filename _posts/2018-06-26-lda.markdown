@@ -276,3 +276,119 @@ p(\vec{w} \vert \vec{z},\vec{\beta}) &=  \int {p(\vec{w} \vert \vec{z},\phi) * p
 
 其中$$ \vec n_k = (n_{k,1},n_{k,2},\dots,n_{k,V}) $$，$$ n_{k,t} $$表示文档集中，第k个主题对应的单词t的个数。
 
+#### 2.3.1.2 $$ p(\vec{z} \vert \vec{\alpha}) $$
+
+\begin{align}
+p(\vec{z} \vert \vec{\alpha}) = \int p(\vec z \vert \theta) * p(\theta \vert \vec \alpha) d\theta 
+\end{align}
+
+我们先看$$ p(\vec z \vert \theta) $$，以下按M篇文档，每篇文档的主题整理得到：
+
+
+\begin{align}
+p(\vec z \vert \theta) = \prod_{m=1}^{M} \prod_{k=1}^{K} \theta_{m,k}^{n_{m,k}}
+\end{align}
+
+其中$$ \vec n_m = (n_{m,1},n_{m,2},\dots,n_{m,K}) $$， $$ n_{m,k} $$ 第m篇文档中，第k个主题对应的单词数。
+
+
+再看$$ p(\theta \vert \vec \alpha) $$，由于服从狄利克雷分布：
+
+\begin{align}
+p(\theta \vert \vec \alpha) &= \prod_{m=1}^{M} p(\vec \theta_m \vert \vec \alpha) \\\
+&= \prod_{m=1}^{M} { \frac{\prod_{k=1}^{K} \theta_{m,k}^{\alpha_k - 1}}{B(\vec \alpha)} }
+\end{align}
+
+
+因此有：
+
+\begin{align}
+p(\vec{z} \vert \vec{\alpha}) &= \int p(\vec z \vert \theta) * p(\theta \vert \vec \alpha) d\theta \\\
+&= \int (\prod_{m=1}^{M} \prod_{k=1}^{K} \theta_{m,k}^{n_{m,k}} * \prod_{m=1}^{M} { \frac{\prod_{k=1}^{K} \theta_{m,k}^{\alpha_k - 1}}{B(\vec \alpha)} } )  d\theta \\\
+&= \prod_{m=1}^{M} \frac{\int ( \prod_{k=1}{K} \theta_{m,k}^{\theta_{m,k} + \alpha_k - 1} )d\theta}{B(\vec \alpha)} \\\
+&= \prod_{m=1}^{M} \frac{B(\vec n_m + \vec \alpha)}{B(\vec \alpha)}
+\end{align}
+
+
+因此文档集的联合分布为
+
+\begin{align}
+p(\vec w, \vec z \vert \alpha, \beta) = \prod_{k=1}^K \frac {B(\vec n_k + \vec \beta)}{B(\vec \beta)} * \prod_{m=1}^{M} \frac{B(\vec n_m + \vec \alpha)}{B(\vec \alpha)} 
+\end{align}
+
+其中
+1. $$ \vec n_k = (n_{k,1},n_{k,2},\dots,n_{k,V}) $$，$$ n_{k,t} $$表示文档集中，第k个主题对应的单词t的个数。
+2. $$ \vec n_m = (n_{m,1},n_{m,2},\dots,n_{m,K}) $$， $$ n_{m,k} $$ 第m篇文档中，第k个主题对应的单词数。
+
+## Collapsed Gibbs Sampling
+
+我们所要求的完全条件概率如下： 
+
+\begin{align}
+p(z_x=k \vert \vec{z_{-x}},\vec{w})=\frac{p(\vec{w},\vec{z})}{p(\vec{w},\vec{z_{-x}})}
+\end{align}
+
+因为当前仅处理文档集中的第x个单词（若该单词位于第M篇文档，且其隐含主题为第K个主题，该单词是词表中的第i个词），
+因此与当前文档和当前主题无关的均被视为常数忽略，因此消去了符号$$ \prod $$
+
+\begin{align}
+p(z_x=k \vert \vec{z_{-x}},\vec{w})=\frac{p(\vec{w},\vec{z})}{p(\vec{w},\vec{z_{-x}})} \\\ 
+\propto \frac{B(\vec{n_k}+\vec{\beta})}{B(\vec{n_{k,-i}}+\vec{\beta})} \cdot \frac{B(\vec{n_m}+\vec{\alpha})}{B(\vec{n_{m,-i}}+\vec{\alpha})}
+\end{align}
+
+其中$$ -i $$表示去掉一个词表中的第i个词。
+
+第一个因子的分母部分(只有第i个单词需要减1，即减去当前单词的影响)：
+
+\begin{align}
+B(\vec{n_{k,-i}}+\vec{\beta})&=\frac{\prod_{t=1}^V \Gamma(n_{t,-i}+\beta_t)}{\Gamma(\sum_{t=1}^V n_{t,-i}+\beta_t)} \\\ 
+&= \frac{\Gamma(n_1+\beta_1)\Gamma(n_2+\beta_2) \dots \Gamma(n_i-1+\beta_i) \dots \Gamma(n_V+\beta_V)}{\Gamma(\sum_{t=1}^V n_{t,-i}+\beta_t)}
+\end{align}
+
+第一个因子的分子部分：
+
+\begin{align}
+B(\vec{n_k}+\vec{\beta})&=\frac{\prod_{t=1}^V \Gamma(n_t+\beta_t)}{\Gamma(\sum_{t=1}^V n_t+\beta_t)} \\\ 
+&= \frac{\Gamma(n_1+\beta_1)\Gamma(n_2+\beta_2) \dots \Gamma(n_i+\beta_i) \dots \Gamma(n_V+\beta_V)}{\Gamma(\sum_{t=1}^V n_t+\beta_t)}
+\end{align}
+
+
+则第一个因子为(基于$$ \Gamma(x+1)=x\Gamma(x) $$)：
+
+\begin{align}
+\frac{B(\vec{n_k}+\vec{\beta})}{B(\vec{n_{k,-i}}+\vec{\beta})} &= \frac{\Gamma(n_i+\beta_i)}{\Gamma(n_i-1+\beta_i)} \cdot \frac{\Gamma(\sum_{t=1}^V n_{t,-i}+\beta_t)}{\Gamma(\sum_{t=1}^V n_t+\beta_t)} \\\ 
+&= (n_i-1+\beta_i) \cdot \frac{1}{\sum_{t=1}^V (n_{t,-i}+\beta_t)} \\\
+&= \frac{n_i-1+\beta_i}{\sum_{t=1}^V (n_{t,-i}+\beta_t)}
+\end{align}
+
+同理，第二个因子为(k是z_x=k的那个k号主题)：
+
+\begin{align}
+\frac{B(\vec{n_m}+\vec{\alpha})}{B(\vec{n_{m,-i}}+\vec{\alpha})} = \frac{\Gamma(n_k+\alpha_k)}{\Gamma(n_k-1+\alpha_k)} \cdot \frac{\Gamma(\sum_{t=1}^K n_{t,-i}+\alpha_t)}{\Gamma(\sum_{t=1}^K n_t+\alpha_t)} \\ 
+= \frac{n_k-1+\alpha_i}{\sum_{t=1}^K (n_{t,-i}+\alpha_t)}
+\end{align}
+
+最终结果如下(通常我们把超参数$$ \vec{\alpha} $$ 和 $$ \vec{\beta} $$的每个元素值设为相同值，即对称超参数)：
+
+\begin{align}
+p(z_i=k|\vec{z_{-i}},\vec{w})&=\frac{p(\vec{w},\vec{z})}{p(\vec{w},\vec{z_{-i}})} \\\
+&= \frac{n_i-1+\beta_i}{\sum_{t=1}^V (n_{t,-i}+\beta_t)} \cdot \frac{n_k-1+\alpha_i}{\sum_{t=1}^K (n_{t,-i}+\alpha_t)} \\\
+&= \frac{n_{k,-i}^{(t)}+\beta}{\sum_{t=1}^V n_{k,-i}^{(t)}+V\beta)} \cdot \frac{n_{m,-i}^{(t)}+\alpha}{\sum_{t=1}^K (n_{m,-i}^{(t)}+K\alpha)}
+\end{align}
+
+其中
+1. $$ n_{k,-i}^{(t)} $$表示第k个topic的第i个单词个数-1
+2. $$ n_{m,-i}^{(t)} $$表示第m个文档的第k个主题词数-1
+
+在得到文档集每个位置的词的对应的主题后，就可以利用狄利克雷分布的期望，求出每篇文档的主题分布和每个主题的词表分布了。
+
+在预测一片新文档的主题时，我们可以直接根据每个词对应的主题( 词表分布的一列 )，统计出现次数最多的主题。
+
+# 参考资料
+
+[https://www.zybuluo.com/Dounm/note/435982](https://www.zybuluo.com/Dounm/note/435982)
+
+[https://yuedu.baidu.com/ebook/d0b441a8ccbff121dd36839a](https://yuedu.baidu.com/ebook/d0b441a8ccbff121dd36839a)
+
+[http://willzhang4a58.github.io/2016/06/lda/](http://willzhang4a58.github.io/2016/06/lda/)
+
