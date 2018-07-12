@@ -1,0 +1,243 @@
+---    
+layout: post
+title:  "word2vec"
+date:   2018-07-12 11:00:00
+categories: MachineLearning
+tags: MachineLearning
+excerpt: 
+---
+
+# 1 简介
+
+Word2vec的模型以大规模语料库作为输入，然后生成一个向量空间（通常为几百维）。词典中的每个词都对应了向量空间中的一个独一的向量，而且语料库中拥有共同上下文的词映射到向量空间中的距离会更近。
+
+对于统计语言模型来说，我们通常构造的目标函数是『最大似然函数』。
+
+$$ \prod_{w\in C} p(w|Context(w)) $$
+
+其中$$ Context(w) $$表示词w的上下文， C表示语料库。
+
+对于N-gram模型（假设这个词只与它前面n-1个词相关）来说，$$ Context(w_i)=w_{i-n+1}^{i-1} $$，
+$$ w_{i-n+1}^{i-1} $$表示单词w的前n-1到前1个之间所有的词。
+
+由于连乘可能导致概率极小，所以经常采用的是『最大对数似然』，即目标函数为：
+
+$$ \mathcal{L}=\sum_{w\in C}log \, p(w|Context(w)) $$
+
+如果直接求p，那么需要保存很多概率值，
+
+其中的概率p也即表示一个模型，如果我们设模型为F，参数为$$ \theta $$，那么有如下式子：
+
+$$ \mathcal{L}=\sum_{w\in C}log \, F(w,Context(w),\theta) $$
+
+也就是说我们只要求出$$ \theta $$就可以了，而不需要保存所有的概率值了。
+
+## 1.1 神经概率语言模型
+
+如果我们采用神经概率语言模型，那么就可以用『神经网络』构建上式中的『函数F』。
+
+### 1.1.1 词向量
+
+我们用一个固定长度的实值向量表示一个词$$ w $$，即$$ v(w)\in \mathbb{R}^m $$
+
+有两种方式：
+
+1. One-hot Representation：用维度为字典长度的向量表示一个词，仅一个分量为1，其余为0。
+缺点是如果语料库很大，那么词向量维度也很大。而且不能很好的刻画词与词之间的关系。
+
+2. Distributed Representation：每个词映射为固定长度的短向量。通过两个向量之间的距离来刻画两个向量之间的相似度。
+
+
+### 1.1.2 网络结构
+
+<img src="/images/word2vec/1.png" width="57%" height="57%">
+
+训练得到的词向量是输出层和映射层之间的参数。
+
+## 1.2 Word2vec的两套框架
+
+为了计算条件概率，可以使用softmax来归一化。
+
+原始的softmax如下:
+
+\begin{align}
+p(y_i \vert Context(w))&=\frac{exp(y_i)}{\sum_{k=1}^K exp(y_k)} \\\ 
+&= \frac{exp(\vec{w_i}^T\vec{x})}{\sum_{k=1}^K exp(\vec{w_k}^T\vec{x}))}
+\end{align}
+
+分母需要枚举一遍词典中所有的词。并且对语料库中的每个词进行训练时，都需要按上述式子计算分母。时间复杂度太高。
+
+因此采用了基于Huffman树的分层Softmax 以及 Negative Sampling。
+
+### 1.2.1 Hierarchical Softmax
+
+基于Huffman树的原因： Huffman树对于高频词会赋予更短的编码，使得高频词离根节点距离更近，从而使得训练速度加快。
+
+分层softmax将树上的叶子节点分配给词典里的词，而将从树根到叶子节点的路径上的每个非叶子结点都看作是二分类，
+路径上的二分类概率连乘的结果就是该叶子节点对应的词的概率。
+
+一个原始的softmax需要一次计算所有的W个词，
+而分层softmax却只需要计算大约$$ log_2(W) $$（即树根到该叶子节点的路径长度）个词，减少了计算的复杂度。
+
+### 1.2.2 Negative Sampling
+
+将$$ (Context(w), w) $$看作一个正样本，将其余的$$ (Context(w_k), w) $$看作负样本。
+
+由于负样本过多，因此只从词典里随机选一些词作为当前词w的负样本。
+
+## 1.3 Word2vec的两种模型
+
+CBOW模型（Continuous Bag-of-Words Model）和Skip-gram模型（Continuous Skip-gram模型）。
+
+### 1.3.1 CBOW模型
+
+之所以叫词袋模型，是因为输入层到投影层的操作由是『叠加』，无所谓词的顺序。
+
+对于$$ (Context(w), w) $$，是根据$$ Context(w) $$预测$$ w $$。$ Context(w) $$一般取词w的前c个词和后c个词，因此w也叫中心词。
+
+### 1.3.2 Skip-gram模型
+
+对于$$ (Context(w), w) $$，是根据$$ w $$预测$$ Context(w) $$
+
+# 2 Hierarchical Softmax
+
+## 2.1 CBOW模型
+
+首先定义一些符号：
+
+- $$ p^w $$：从根节点到词$$ w $$对应的叶子节点的路径
+
+- $$ l^w $$：从根节点到词$$ w $$对应的叶子节点的路径上，包含的节点个数。
+
+- $$ p_1^w, p_2^w, \dots, p_{l^w}^w $$：路径$$ p^w $$上对应的节点。
+
+- $$ d_2^w,d_3^w,\dots,d_{l^w}^w\in \{0,1\} $$ :路径上的节点对应的Huffman编码，根节点不对应编码
+
+- $$ \theta_1^w,\theta_2^w,\dots,\theta_{l^w}^w\in \mathbb{R}^m $$：路径上的 非叶子节点 对应的参数向量。
+
+
+Context(w)在CBOW模型中为2c个单词，将这2c个单词的词向量累加，得到向量$$ X_w $$。
+
+从根节点出发到某个叶子节点的路径上，每次分支都可视为进行了一次逻辑回归二分类器。
+为了方便后续处理，给$$ X_w $$扩充一维，数值为1，也即对应着bias。
+
+约定：分到左边为0类（编码0），分到右边是1类（编码1）。
+
+每个词w的概率计算如下：
+
+\begin{align}
+p(w \vert Context(w))=\prod\limits_{i=2}^{l^w}p(d_i^w \vert X_w, \theta_{i-1}^w)
+\end{align}
+
+对于每个节点的逻辑回归二分类，有如下式子，其中g表示sigmoid函数：
+
+\begin{align}
+p(d_i^w|X_w, \theta_{i-1}^w) = \left\\{ \begin{aligned}
+1-g(X_w^T\theta_{i-1}^w) \quad & d_i^w = 0 \\\
+g(X_w^T\theta_{i-1}^w) \quad & d_i^w = 1
+\end{aligned} \right.
+\end{align}
+
+优化目标函数如下(即是极大似然，可以取对数得到对数似然)：
+
+\begin{align}
+\mathcal{L} = \prod_{w \in C} \prod_{i=2}^{l^w} p(d_i^w|X_w, \theta_{i-1}^w)
+\end{align}
+
+
+概率计算可以写作
+
+$$ p(d_i^w|X_w, \theta_{i-1}^w) = [1-g(X_w^T\theta_{i-1}^w)]^{1-d_i^w}[g(X_w^T\theta_{i-1}^w)]^{d_i^w} $$
+
+
+代入到优化目标并取对数
+
+\begin{align}
+\mathcal{L} &= \sum_{w \in C} log \prod_{i=2}^{l^w} p(d_i^w|X_w, \theta_{i-1}^w) \\\
+&= \sum_{w \in C} log \prod_{i=2}^{l^w} {[1-g(X_w^T\theta_{i-1}^w)]^{1-d_i^w}[g(X_w^T\theta_{i-1}^w)]^{d_i^w}} \\\
+&= \sum_{w \in C} \sum_{i=2}^{l^w} (1-d_i^w)log (1-g(X_w^T\theta_{i-1}^w)) + d_i^w log (g(X_w^T\theta_{i-1}^w))
+\end{align}
+
+
+要求的是目标函数的最大值，如果采用随机梯度上升法，并且对路径上的每个二分类器单独的更新器参数，以及更新词向量，可以设目标函数如下：
+
+$$ J = (1-d_i^w)log (1-g(X_w^T\theta_{i-1}^w)) + d_i^w log (g(X_w^T\theta_{i-1}^w)) $$
+
+求导（$$ log' (g(x))=1-g(x), log'(1-g(x))=-g(x) $$）得
+
+\begin{align}
+\frac{\partial J }{\partial\theta_{j-1}^w} &= -(1-d_i^w)g(X_w^T\theta_{i-1}^w)X_w + d_i^w(1-g(X_w^T\theta_{i-1}^w))X_w \\\
+&= (d_i^w - g(X_w^T\theta_{i-1}^w))X_w 
+\end{align}
+
+\begin{align}
+\frac{\partial J }{\partial X_w} &= -(1-d_i^w)g(X_w^T\theta_{i-1}^w)\theta_{i-1}^w + d_i^w(1-g(X_w^T\theta_{i-1}^w))\theta_{i-1}^w \\\
+&= (d_i^w - g(X_w^T\theta_{i-1}^w))\theta_{i-1}^w
+\end{align}
+
+在对词向量进行更新时，因为$$ X_w $$表示的是Context(w)中各词的词向量的叠加，也即每个词都对$$ X_w $$有贡献，因此需要对每个词更新
+
+$$ v(w) = v(w) + \eta \sum_{2}^{l^w} \frac{\partial J }{\partial\theta_{j-1}^w} $$
+
+## 2.2 Skip-gram模型
+
+已知当前词w，对其上下文中的词Context(w)进行预测。
+
+$$ p(Context(w) \vert w)=\prod_{u \in Context(w)}p(u \vert w) $$
+
+目标函数则是
+
+\begin{align}
+\mathcal{L} = \prod_{w \in C}  \prod_{u \in Context(w)} \prod_{i=2}^{l^u} p(d_i^u|w, \theta_{i-1}^u)
+\end{align}
+
+取对数似然，并整理
+
+\begin{align}
+\mathcal{L} &= \sum_{w \in C} log \prod_{u \in Context(w)} \prod_{i=2}^{l^u} p(d_i^u|w, \theta_{i-1}^u) \\\
+&= \sum_{w \in C} \sum_{u \in Context(w)} \sum_{i=2}^{l^u} (1-d_i^u) log (1-g(w^T\theta_{i-1}^u)) + d_i^u log (g(w^T\theta_{i-1}^u))
+\end{align}
+
+同样的，我们如果采用随机梯度上升法，
+
+$$ J = (1-d_i^u) log (1-g(w^T\theta_{i-1}^u)) + d_i^u log (g(w^T\theta_{i-1}^u)) $$
+
+
+求导类似于上面的CBOW
+
+# 3 Negative Sampling
+
+## 3.1 CBOW 
+
+根据Context(w)预测w，对于给定的二元组(w, Context(w))，这是一个正样本，其余的就是负样本。
+
+由于负样本过多，因此需要欠采样。假设对于w有一个选取好的负样本集NEG(w)。
+
+Negative Sampling没有哈夫曼树，重新定义$$ \theta $$符号为每一个词w的辅助向量，记作$$ \theta^w $$
+
+设$$ g(X_u^T \theta^w) $$是上下文是Context(u)时，中心词为w的概率
+
+对数似然如下
+
+$$ \mathcal{L} = \sum_{w\in C}[ log (g(X_w^T \theta^w)) +  \sum_{u\in NEG(w)} log(g(X_w^T \theta^u)) ] $$
+
+
+采用随机梯度上升
+
+$$ J = log (g(X_w^T \theta^w)) +  \sum_{u\in NEG(w)} log(g(X_w^T \theta^u)) $$
+
+求导如下
+
+\begin{align}
+\frac{\partial J}{\partial X_w} &= [1-g(X_w^T\theta^w)]\theta^w-\sum\limits_{u\in NEG(w)}g(X_w^T\theta^u)\theta^u \\\
+\frac{\partial J}{\partial \theta^w} &=[1-g(X_w^T\theta^w)]X_w \\\
+\frac{\partial J}{\partial \theta^u} &= -g(X_w^T\theta^u)X_w
+\end{align}
+
+在对词向量进行更新时，因为$$ X_w $$表示的是Context(w)中各词的词向量的叠加，也即每个词都对$$ X_w $$有贡献，因此需要对每个词更新
+
+# 参考资料
+
+[https://www.zybuluo.com/Dounm/note/591752](https://www.zybuluo.com/Dounm/note/591752)
+
+[http://willzhang4a58.github.io/2016/05/word2vec/](http://willzhang4a58.github.io/2016/05/word2vec/)
