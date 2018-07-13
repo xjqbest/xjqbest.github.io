@@ -207,9 +207,17 @@ $$ J = (1-d_i^u) log (1-g(w^T\theta_{i-1}^u)) + d_i^u log (g(w^T\theta_{i-1}^u))
 
 # 3 Negative Sampling
 
-## 3.1 CBOW 
+带权采样，语料中的频率越大，词的选取概率越大。 Google的word2vec中的概率为
 
-根据Context(w)预测w，对于给定的二元组(w, Context(w))，这是一个正样本，其余的就是负样本。
+\begin{align}
+\frac{counter(w)^{\frac{3}{4}}}{\sum\limits_{u\in D}counter(u)^{\frac{3}{4}}}
+\end{align}
+
+其中D是词典
+
+## 3.1 CBOW模型
+
+根据Context(w)预测w，对于给定的二元组(Context(w)， w)，这是一个正样本，其余的就是负样本。
 
 由于负样本过多，因此需要欠采样。假设对于w有一个选取好的负样本集NEG(w)。
 
@@ -219,12 +227,12 @@ Negative Sampling没有哈夫曼树，重新定义$$ \theta $$符号为每一个
 
 对数似然如下
 
-$$ \mathcal{L} = \sum_{w\in C}[ log (g(X_w^T \theta^w)) +  \sum_{u\in NEG(w)} log(g(X_w^T \theta^u)) ] $$
+$$ \mathcal{L} = \sum_{w\in C}[ log (g(X_w^T \theta^w)) +  \sum_{u\in NEG(w)} log(1 - g(X_w^T \theta^u)) ] $$
 
 
 采用随机梯度上升
 
-$$ J = log (g(X_w^T \theta^w)) +  \sum_{u\in NEG(w)} log(g(X_w^T \theta^u)) $$
+$$ J = log (g(X_w^T \theta^w)) +  \sum_{u\in NEG(w)} log(1 - g(X_w^T \theta^u)) $$
 
 求导如下
 
@@ -234,10 +242,47 @@ $$ J = log (g(X_w^T \theta^w)) +  \sum_{u\in NEG(w)} log(g(X_w^T \theta^u)) $$
 \frac{\partial J}{\partial \theta^u} &= -g(X_w^T\theta^u)X_w
 \end{align}
 
-在对词向量进行更新时，因为$$ X_w $$表示的是Context(w)中各词的词向量的叠加，也即每个词都对$$ X_w $$有贡献，因此需要对每个词更新
+在对词向量进行更新时，因为$$ X_w $$表示的是Context(w)中各词的词向量的叠加，
+也即每个词都对$$ X_w $$有贡献，因此需要对每个词更新
+
+## 3.2 Skip-gram模型
+
+根据w预测Context(w)，对于给定的二元组(w, Context(w))，这是一个正样本，其余的就是负样本。
+
+对数似然如下：
+
+\begin{align}
+\mathcal{L} = \sum_{w\in C} \sum_{u\in Context(w)} [ log (g(w^T \theta^u)) + \sum_{x\in NEG(u)} log(1 - g(x^T \theta^u)) ] 
+\end{align}
+
+# 4 其他几点注意
+
+1. 目标函数可以加上正则项
+2. 一般只需要对语料遍历一次
+3. 模型中需要的训练的参数包括逻辑回归对应的参数向量和词典D中每个词的词向量。
+初始化时，前者采用的是零初始化，后者是随机初始化为以0为中心的附近一个小区间的值。
+
+# 5. paragraph2vec
+
+<img src="/images/word2vec/2.png" width="57%" height="57%">
+
+相比于word2vec，训练过程中新增了paragraph id，即给每个paragraph一个唯一的id。Paragraph id也会被映射为一个向量。
+
+训练中将paragraph vector和word vector累加或者连接起来，作为输出层softmax的输入。
+
+对于相同的paragraph来说，paragraph vector是共享的，可以看作从当前上下文缺失的当前段落的信息。
+
+对于一个新的paragraph，先给它一个paragraph id，
+然后利用原先就已经训练好的word vectors和神经网络参数，
+固定它们的值，
+使用梯度下降训练待预测段落，得到了待预测段落的paragraph vector。
 
 # 参考资料
 
 [https://www.zybuluo.com/Dounm/note/591752](https://www.zybuluo.com/Dounm/note/591752)
 
 [http://willzhang4a58.github.io/2016/05/word2vec/](http://willzhang4a58.github.io/2016/05/word2vec/)
+
+[http://www.cnblogs.com/peghoty/p/3857839.html](http://www.cnblogs.com/peghoty/p/3857839.html)
+
+[http://d0evi1.com/paragraph2vec/](http://d0evi1.com/paragraph2vec/)
