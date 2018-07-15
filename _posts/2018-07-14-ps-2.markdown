@@ -1,0 +1,130 @@
+---    
+layout: post
+title:  "ParameterServer架构以及优化之处"
+date:   2018-07-14 00:00:00
+categories: MachineLearning
+tags: MachineLearning
+excerpt: 
+---
+
+# 1 机器学习框架的三种角色
+
+PServer即Parameter Server（参数服务器），作用是保存模型训练过程中的所有参数。即是分布式存储key-value对。
+
+Worker模块属于执行者的角色，即执行具体的计算逻辑。
+
+Master是机器学习作业中作业的管理者，管理ParameterServer、Worker的存活性，管理作业的资源申请和释放以及作业的进度。
+
+本文讲一讲PServer模块。
+
+# 2 PServer 提供的接口
+
+通常pserver提供如下接口：
+
+- pull：根据查询的key列表返回相应的value列表。阻塞直到返回。
+
+- push：更新key列表对应的value。非阻塞。
+
+- flush：清空缓存的所有push请求（即把这些请求都发送出去），等这些key更新完了之后再返回。阻塞直到返回。
+
+# 3 PServer 中几个子模块
+
+## 3.1 Table
+
+Table是一个模版类，用户用来定义存储key-value对的一张表。
+
+```cpp
+template <class KEY, class VALUE, class MERGER, class PARTITION, class PULL_MESSAGE, class PUSH_MESSAGE>
+class Table {
+...
+}
+```
+
+其中各个模板参数的含义如下：  
+- KEY： 存储的key-value对中key的类型，一般为int、string。
+- VALUE：存储的key-value对中value的类型，可以是float、double或者用户自定义的结构体。
+- MERGER：对相同的KEY的push请求结构体PUSH_MESSAGE，将PUSH_MESSAGE与VALUE合并产生最终的VALUE。
+- PARTITION：封装哈希算法，根据传入的key计算对应的哈希值 或者 根据传入的KEY计算对应的pserver id（也即是将KEY哈希到某一固定的pserver）。
+- PULL_MESSAGE：根据KEY pull下来的结构体。
+- PUSH_MESSAGE：用户push的是<KEY, PUSH_MESSAGE>对的列表。在pserver端，首先执行PUSH_MESSAGE的+=操作得到新的PUSH_MESSAGE，然后每隔一段时间，将+=后的PUSH_MESSAGE执行MERGER的操作合入VALUE。
+
+## 3.2 TableShard
+
+每个Table存储的KEY-VALUE对又可以切分成许多部分，每个部分称为一个shard。
+每个pserver的shard的数目是可以配置的。一般来说，每个shard对应一个单独的线程
+
+这样做的好处是各个shard分担了pull/push请求的压力。
+
+同时我们更新一个shard的数据时（即push），是单线程更新，也就不需要加锁了。
+
+## 3.3 Seqentialization
+
+串行的接收pull请求，并将请求转发给各个shard。
+
+原因如下：
+1. pull请求中一般包含许多key，key可能存在不同shard中，因此一个pull请求需要拆成多个请求发给多个shard
+2. 一个shard对应一个线程，是串行处理每个pull请求，然后返回
+3. 如果不限制pull的顺序，可能出现死锁的情况。
+
+## 3.4 Aggregator
+
+临时缓存需要更新到shard的push请求的key-value对，并对缓存期间相同key做合并操作（执行PUSH_MESSAGE的+=操作）。
+
+## 3.5 RpcWorker和RpcServer
+
+收发rpc消息的类。
+
+# 4 PServer 的几点优化
+
+## 4.1 Shard读写分离
+
+每个Shard中存储两份相同的key-value数据，分别是read-data和write-data。两份数据通过指针周期性交换。
+
+访问read-data之前会加读锁，当两份数据需要交换时，给read-data加写锁。
+
+其实交换后，新的write-data是旧数据了，我们还需要把新的read-data的给更新成最新的才行。
+
+直接复制一般比较慢。就像git push合并diff 而不是每次push上传全部文件，我们更新时候也可以记录diff。
+
+做法是保存一份diff，每次push更新的key都合并保存在diff里，这样交换两份数据的指针后，再在新的write-data上应用该diff。
+
+## 4.2 容错与恢复
+
+通过一致性hash的方法，每个节点都会保存前k个节点的数据。
+
+当master检测到某一pserver节点挂掉后，通过心跳告知其他所有节点暂停计算，直到节点恢复。
+
+## 4.3 PULL_MESSAGE
+
+根据key，从pserver上pull下来的数据，可以只是value的一部分，即为PULL_MESSAGE。
+
+这样可以避免pull下来不需要的数据，减小网络的拥堵。
+
+## 4.4 worker如何定位pserver
+
+worker初始时是通过master节点获取所有pserver节点的列表，后续这个列表便不再改变。
+
+pserver由于动态扩容或者容错，节点列表可能会动态改变，那么worker端维护的该列表也需要及时更新。
+
+所以可以单独抽出一个模块，worker每次根据pserver的id查询对应的ip，类似域名与ip映射的DNS。
+
+## 4.5 一致性哈希
+
+一致性哈希算法：将数据按照某种hash算法映射到环上，然后将机器按照同样的hash算法映射到环上，将数据存储到环上顺时针最近的机器上。
+
+其中一种实现是jump consistent hash，零内存消耗，均匀分配且速度快：
+
+```cpp
+int32_t jump_consistent_hash(uint64_t key, int32_t num_buckets) {
+    int64_t b = -1;
+    int64_t j = 0;
+
+    while (j < num_buckets) {
+        b = j;
+        key = key * 2862933555777941757ULL + 1;
+        j = (b + 1) * (double(1LL << 31) / double((key >> 33) + 1));
+    }
+
+    return b;
+}
+```
