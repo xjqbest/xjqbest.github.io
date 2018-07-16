@@ -1,0 +1,32 @@
+---    
+layout: post
+title:  "MapReduce"
+date:   2018-07-15 00:00:00
+categories: MachineLearning
+tags: MachineLearning
+excerpt: 
+---
+
+
+<img src="/images/mr/1.png" width="57%" height="57%">
+
+假设我们设置了M个mapper进程，R个reducer进程。
+
+输入数据自动分割为M个数据片段的集合，Map调用被分布到多台机器上执行。不同的输入数据片段能够在不同的Map进程上并行处理。
+
+使用分区函数将Map调用产生的中间key值分成R个不同分区，Reduce调用也被分布到多台机器上执行。
+
+1. split阶段：
+切分数据得到M个数据块。
+
+2. map阶段：
+map函数将各个文件块的内容转换成新的key-value对。  
+
+3. shuffle阶段：
+根据reducer的任务数量对key-value对进行分区，然后对每个分区的key进行排序。  
+如果用户设置了combine，则将mapper本地有相同的key的所有value执行combine操作，比如相加。
+combine的目的是为了减少传输到Reduce中的数据量。
+
+4. reduce阶段：
+每个mapper中，同一分区的数据会发给同一reducer，然后对key进行排序。然后执行reduce函数得到输出。
+
