@@ -71,8 +71,46 @@ epoll没有fd集合大小限制问题。
 
 #### 4.1 生产者消费者
 
+需要注意的几点：
+1. 使用`std::unique_lock<std::mutex> lck (mtx);`加锁访问存放物品的队列
+2. 当队列为空时，消费者使用`std::condition_variable`的wait方法阻塞当前线程，并释放锁，使得其他被阻塞在锁竞争上的线程得以继续执行。  
+为了避免虚假唤醒需要使用while循环：
+```cpp
+while (queue.empty()){
+    cv.wait(lck);
+}
+```
+3. 当生产者生产新的物品时，调用cv.notify_all()或者cv.notify_one()来唤醒线程
+
+
+虚假唤醒例子：  
+有三个线程在等待一个队列，有以下情况发生：
+1. 线程1在取到queue元素之后去做处理，之后queue为空
+2. 线程2判断queue是否为空，此时queue为空，此时线程2阻塞在wait上
+3. 线程3开始向queue里添加一个元素，然后调用notify
+4. 此时阻塞在wait上的线程2被唤醒获取queue lock之前，如果这个时候线程1恰好处理完毕然后获取锁重新取queue里的元素
+5. 如果在线程2唤醒并获取queue lock之后，在其取走queue里的元素之前线程1已经将元素取走，这个时候线程2就出现了虚假唤醒
+
+notify_all与notify_one区别：  
+notify_all: Only one thread will lock the mutex at a time, but they'll all return from the wait as soon as they get the mutex
 
 #### 4.2 读写锁
+
+```cpp
+boost::shared_mutex mutex;
+void read() {
+    boost::shared_lock<boost::shared_mutex> read_lock(mutex);
+    ...
+}
+void write() {
+    boost::unique_lock<boost::shared_mutex> read_lock(mutex);
+    ...
+}
+```
+
+shared_lock是读锁，被锁后仍允许其他线程执行同样被shared_lock的代码。这是一般做读操作时的需要。
+
+unique_lock是写锁。被锁后不允许其他线程执行被shared_lock或unique_lock的代码。这是一般做写操作时的需要。
 
 
 ### 5 进程间通信方式
@@ -81,6 +119,53 @@ epoll没有fd集合大小限制问题。
 
 ### 6 fork
 
+父进程调用fork函数创建子进程，这两个进程将执行相同的代码，子进程的栈、数据以及堆栈是父进程内存相应各部分的拷贝，它们互不影响。
+
+
 ### 7 操作系统中进程调度策略
 
+1. 先来先服务（FCFS）：有利于长作业，而不利于短作业。
+2. 短作业优先：对短作业优先调度的算法，对长作业不利。
+3. 优先级调度：基于进程优先级。又分抢占式和非抢占式。
+4. 时间片轮转：linux中的nice值，代表的是时间片的比例，因此越小的nice值，占有CPU的时间也就会越长。
+
+
 ### 8 页面置换算法
+
+1. 先进先出（FIFO）：先进入内存的页，先退出内存。
+2. 最近最少使用（LRU）：
+```cpp
+class LRUCache {
+public:
+    LRUCache(int capacity) : capacity(capacity) {}
+    int get(int key) {
+        if (kv_map.find(key) == kv_map.end()) {
+            return -1;
+        }
+        l.erase(ki_map[key]);
+        l.push_front(key);
+        ki_map[key] = l.begin();
+        return kv_map[key];
+    }
+    void put(int key, int value) {
+        if (kv_map.find(key) != kv_map.end()) {
+            l.erase(ki_map[key]);
+        } else if (kv_map.size() >= capacity) {
+            kv_map.erase(l.back());
+            ki_map.erase(l.back());
+            l.pop_back();
+        }
+        l.push_front(key);
+        kv_map[key] = value;
+        ki_map[key] = l.begin();
+    }
+private:
+    unordered_map<int, int> kv_map;
+    unordered_map<int, list<int>::iterator> ki_map;
+    list<int> l;
+    int capacity;
+};
+```
+3. 第二次机会
+当选择置换页面时，检查它的访问位。如果是0，就淘汰这页；如果访问位是1，就给它第二次机会，并选择下一个FIFO页面。当一个页面得到第二次机会时，它的访问位就清为0。  
+如果一个页面经常使用，它的访问位就经常保持为1，不会被淘汰出去。
