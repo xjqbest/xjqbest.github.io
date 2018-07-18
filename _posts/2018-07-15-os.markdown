@@ -94,7 +94,50 @@ while (queue.empty()){
     cv.wait(lck);
 }
 ```
-3. 当生产者生产新的物品时，调用cv.notify_all()或者cv.notify_one()来唤醒线程
+3. 当生产者生产新的物品时，调用cv.notify_all()或者cv.notify_one()来唤醒线程：  
+
+```cpp
+std::mutex mtx;
+std::condition_variable cv;
+// 消费
+void consume() {
+    std::unique_lock<std::mutex> lck (mtx);
+    while (queue.empty()){
+        queue.wait(lck);
+    }
+    int data = queue.front();
+    queue.pop_front();
+
+}
+// 生产
+void produce() {
+    std::unique_lock<std::mutex> lck (mtx);
+    queue.push_back(std::move(item));
+    lck.unlock();
+    cond_.notify_all();
+}
+```
+或者
+```cpp
+std::mutex mtx;
+std::condition_variable not_empty;
+std::condition_variable not_full;
+// 消费
+void consume() {
+    std::unique_lock<std::mutex> lck(mtx);
+    not_empty.wait(lk, [&]{ return !queue.empty(); });
+    int data = queue.front();
+    queue.pop_front();
+    not_full.notify_all();
+}
+// 生产
+void produce() {
+    std::unique_lock<std::mutex> lck(mtx);
+    not_full.wait(lk, [&]{ return queue.size() < max_size; });
+    queue.push_back(std::move(item));
+    not_empty.notify_all();
+}
+```
 
 
 虚假唤醒例子：  
