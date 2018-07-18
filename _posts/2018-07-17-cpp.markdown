@@ -1,0 +1,170 @@
+---    
+layout: post
+title:  "c++基础知识的小笔记"
+date:   2018-07-17 00:00:00
+categories: C++
+tags: C++
+excerpt: 
+---
+
+### inline Function
+
+为了解决一些频繁调用的小函数大量消耗栈空间的问题，引入了inline修饰符。
+
+inline函数仅仅是一个对编译器的建议，所以最后能否真正内联，看编译器。
+
+如果用了太多的inline函数，编译出来的可执行文件由于冗余代码较多，可能比较大。
+
+### Array Decay
+
+假如我们有一个数组`int arr[10];`，
+调用函数传参数为指针arr时(例如`void fun(int (&p)[10])`或`void fun(int* p)`)，仅仅传递了数组第一个元素的地址，调用sizeof(arr)是得不到数组长度的。
+
+解决办法是传引用`void fun(int (&p)[10])`
+
+### Functor
+
+仿函数(functor)，就是使一个类的使用看上去像一个函数。实现就是类中实现一个operator()，这个类就有了类似函数的行为。
+
+```cpp
+class display
+{
+public:
+    void operator()(const int &x)
+    {
+        cout << x << endl; 
+    } 
+}; 
+int main()
+{
+    vector<int> vec = {1,2,3,4,5};
+    for_each(vec.begin(), vec.end(), display()); 
+    return 0; 
+} 
+```
+
+### Const member functions
+
+const函数不允许修改类的成员。
+
+non-const函数只能被类的non-const的对象调用。
+
+### References vs Pointers
+
+同：
+1. 都可以用来修改它们指向的变量的值。
+2. 都可以用来避免函数传参数的复制的开销。
+
+异：
+1. 指针可以声明为void，或赋值为NULL
+2. 定义引用的时候必须初始化。引用初始化后，便不能再引用其他变量。（可以看出引用无法实现链表等数据结构）
+
+引用的优点：
+1. Safer： 由于引用必须被初始化，因此没有野指针（未被初始化的指针）的问题。
+2. Easier to use：没有指针的解引用操作，更易用。
+
+### Smart pointer
+
+```cpp
+template <class T>
+class SmartPtr
+{
+public:
+   // Constructor
+   explicit SmartPtr(T *p = NULL) { ptr = p; }
+   // Destructor
+   ~SmartPtr() { delete(ptr); }
+   // Overloading dereferncing operator
+   T & operator * () {  return *ptr; }
+   // Overloding arrow operator so that members of T can be accessed
+   // like a pointer (useful if T represents a class or struct or 
+   // union type)
+   T * operator -> () { return ptr; }
+private:
+    T *ptr;  // Actual pointer
+};
+```
+
+可以有多个shared_ptr实例指向同一块动态分配的内存，当最后一个shared_ptr离开作用域时，才会释放这块内存。shared_ptr也是线程安全的。另一方面，unique_ptr意味着所有权。单个unique_ptr离开作用域时，会立即释放这块内存。
+
+正确的使用方式应该是使用make_unique 或者make_shared和拷贝构造函数建立副本。
+
+shared_ptr与shared_ptr之间，每拷贝一次，引用计数就会+1，而如果使用weak_ptr则不会出现这个现象。如果将一个shared_ptr指针赋值给weak_ptr指针，对shared_ptr指针本身不会造成任何影响。weak_ptr可以用来来探测被赋值过来的shared_ptr指针的有效性（expired函数），同时weak_ptr指针也可以间接操纵shared_ptr指针（lock函数）。
+
+### Void pointer
+
+可以指向任何类型的数据。并且它本身不能被解引用，除非强制类型转换。
+
+### nullptr
+
+```cpp
+#include <iostream>
+using namespace std;
+// function with integer argument
+int fun(int N)   { cout << "fun(int)"; }
+// Overloaded function with char pointer argument
+int fun(char* s)  { cout << "fun(char *)"; }
+int main() {
+    // Ideally, it should have called fun(char *),
+    // but it causes compiler error.
+    // error: call of overloaded 'fun(NULL)' is ambiguous
+    fun(NULL);  
+}
+```
+问题在于NULL定义为(void *)0，因此它可转换为int。可以使用nullptr解决这个问题，
+nullptr可以转换成任何类型的指针，并且可以转换为bool，不可转换为int。
+
+
+### new vs malloc()
+
+<img src="/images/cpp/1.png" width="57%" height="57%">
+
+大致就是new是一个操作符，会调用构造函数，返回对象的指针而不是void*，申请的内存大小由编译器计算而非手动传入。
+
+delete and free() 分别对应 new 和 malloc
+
+### Empty Class
+
+空类的大小通常为1，保证对象之间是不同的地址。
+
+### 类中的静态数据成员
+
+必须在类外定义。
+
+独立于所有对象而存在，并且不需要对象就可以访问。
+
+### 类中的静态函数
+
+1. 没有this指针  
+2. 不能为virtual、const、volatile  
+3. 不能基于是否是static来重载
+
+### friend class / friend function
+
+friend class: 可以访问类的private和protected成员  
+```cpp
+class Node {
+private:
+  int key;
+  Node *next;
+  friend class LinkedList; // Now class LinkedList can access private members of Node
+};
+```
+
+friend function：可以是另一个类的成员函数或者一个全局函数  
+```cpp
+class Node {
+private:
+  int key;
+  Node *next;
+  friend int LinkedList::search(); // Only search() of linkedList can access internal members
+};
+```
+
+friend关系不可继承。
+
+
+
+
+
+
