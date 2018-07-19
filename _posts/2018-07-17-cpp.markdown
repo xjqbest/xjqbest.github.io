@@ -163,8 +163,176 @@ private:
 
 friend关系不可继承。
 
+### 构造函数
+
+变量的初始化顺序是按照声明的顺序，而非初始化列表的中的顺序。
+
+如果人为加了复制构造函数，那么编译器不会生成任何默认构造函数。
+
+如果人为加了构造函数，那么编译器还是会生成默认复制构造函数。
+
+### 复制构造函数
+
+```cpp
+ClassName (const ClassName &old_obj); 
+```
+
+何时被调用：
+1. 函数以值返回对象
+2. 函数传参以值传递
+3. 一个对象基于另一个对象构造，例如`Object a; Object b = a`
+
+默认的复制构造函数只是浅拷贝，因此如果浅拷贝是ok的，那么没必要手动的写复制构造函数。赋值操作符同理。
+
+我们可以把复制构造函数设为private，那么该类就是non-copyable。
+
+为什么复制构造函数传参是传的引用：因为以值传参需要调用复制构造函数，陷入了循环。
+
+为什么复制构造函数传参是传的const：保证其不被修改。
+
+### 复制构造函数 vs 赋值操作符
+
+复制构造函数：新对象从现有对象构造时  
+赋值操作符：为已存在的对象赋值
+
+```cpp
+MyClass t1, t2;
+MyClass t3 = t1;  // 复制构造函数
+t2 = t1;          // 赋值操作符
+```
+
+### 赋值操作符
+
+编译器在如下情况v不会生成默认赋值操作符：
+1. 有non-static const 成员变量
+2. 有non-static 引用 成员变量
+3. 有non-static 不支持赋值操作符的 成员变量
 
 
+### 析构函数
 
+何时被调用：
+1. 函数结束、程序结束、一个作用域结束
+2. delete操作符被调用
 
+何时需要用户手动的写： 有动态分配的内存时。
+
+基类的析构函数通常是viutual，为了保证继承类的对象被正确的释放。
+
+### explict
+
+如果存在只有一个参数的构造函数，那么该构造函数也是隐式转换的构造函数。
+
+为了避免隐式转换，可以将构造函数声明为explict
+
+不过我们依然可以通过显式的类型转换来“显式转换”
+
+### 初始化列表（Initializer List）
+
+何时需要用
+1. non-static const 成员变量
+2. 引用
+3. 没有默认构造函数的成员变量
+4. 初始化基类
+5. 参数名和成员变量同名
+6. 性能考虑：不需要调用某一成员变量的构造函数+赋值操作符，而只需要调用复制构造函数
+
+### static
+
+static对象直到程序结束才会销毁。
+
+### 函数重载
+
+函数名相同，参数不同。类中成员函数可以基于是否是const函数而重载。
+
+#### 哪些情况不能重载：
+1. 返回值的不同
+2. static成员函数
+3. 传递指针与数组，传递函数与函数指针
+```cpp
+int fun(int *ptr);
+int fun(int ptr[]);
+// 
+void h(int ());
+void h(int (*)());
+```
+4. 参数是否是const或volatile  
+但是指向T、指向const T、指向volatile T则被视为不同的参数类型。引用同理。
+5. 参数默认值不同
+
+基类和继承类之间不存在函数重载。
+
+###  操作符重载
+
+```cpp
+ClassName& operator++() {
+    value++;
+    return *this;
+}
+ClassName operator++(int) {
+    ClassName ret(*this);
+    value++;
+    return ret;
+}
+ClassName& operator=(const ClassName& t) {
+    // Check for self assignment
+    if(this != &t) {
+        *ptr = *(t.ptr);
+    }
+   return *this;
+}
+int& operator[](int i) {
+    return a[i];
+}
+bool operator==(const ClassName& t) const {
+    ...
+}
+ClassName* operator->() {
+    return this;
+}
+ClassName operator+(const ClassName& t) {
+    ClassName tmp;
+    tmp.a = a + t.a;
+    return tmp;
+}
+operator double (){
+    return a;
+}
+```
+
+#### 重载输入输出操作符
+
+首先有两点注意:
+1. cout是ostream类的对象，cin是istream类的对象
+2. 操作符得是全局函数，否则得是cout/cin的成员函数了。
+
+```cpp
+class Test {
+private:
+    int a;
+    friend ostream& operator << (ostream& out, const Test &c);
+    friend istream& operator >> (istream& in,  Test &c);
+}; 
+ostream& operator << (ostream& out, const Test& c) {
+    out << c.a;
+    return out;
+}
+istream& operator >> (istream& in, Test& c) {
+    cout << "Enter a ";
+    in >> c.a;
+    return in;
+}
+int main()
+{
+   Test c1;
+   cin >> c1;
+   cout << "The object is ";
+   cout << c1;
+   return 0;
+}
+```
+
+如下操作符无法被重载：
+
+<img src="/images/cpp/2.png" width="67%" height="67%">
 
