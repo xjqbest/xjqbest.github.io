@@ -60,10 +60,10 @@ W'也被reshape为$$ n \times ck_hk_w $$。
 
 论文只考虑了常见的残差网络，设residual分支的输出为$$ Y_2 $$，shortcut 分支的输出为$$ Y_1 $$。
 
-这里首先在residual分支的第一层前做了channel采样，从而减少计算量（训练过程中做的）。
+这里首先在residual分支的第一层前做了channel采样，从而减少计算量（训练过程中做的，即filter layer）。
 
 设$$ Y_1' $$为原始的上一层的输出，
-那么channel pruning中，residual分支的输出拟合$$ Y_1 + Y_2 - Y_1' $$，其中$$ Y_1' $$是裁减后的shortcut。
+那么channel pruning中，residual分支的输出拟合$$ Y_1 + Y_2 - Y_1' $$，其中$$ Y_1' $$是上一层裁减后的shortcut。
 
 <img src="/images/channel_pruning/4.png" width="43%" height="43%">
 
