@@ -99,7 +99,28 @@ W_n * z \approx h_n * V = \sum_{k=1}^K {h_n^k * V^k} = \sum_{k=1}^K{h_n^k * (v_k
 我们通过直接利用可分离卷积的形式避免了优化方法一中的nuclear norm。
 利用共轭梯度法（conjugate gradient descent），交替优化上式中的行向量和列向量。
 
-## Data Reconstruction Optimization
+### Data Reconstruction Optimization
 
+我们可以通过重建输出得到最优的一组基卷积核：
 
+<img src="/images/speed_up_cnn_with_low_rank/6.png" width="42%" height="42%">
 
+方法二有两个优点：
+1. 卷积核中不相关或者冗余的维度，在重建输出时候会被自动的忽略，
+而方法一中，这些维度还是会被考虑进去。
+2. 通过逐层的优化，我们可以把上一个卷积层优化后的输出，喂给下一个卷积层，
+而不是把原始的输出喂给下一个卷积层。这样做可以在优化当前层时，也考虑了前一层输出的误差。
+
+<img src="/images/speed_up_cnn_with_low_rank/7.png" width="60%" height="60%">
+
+一个明显的可选方法是直接基于新的近似的网络结构，然后重新训练得到模型。
+不过实际效果并不好，容易产生过拟合，而使用dropout又会产生欠拟合，
+这很可能是由于近似的网络结构已经能充分近似原始卷积核了。
+
+## 实验
+
+对于filter reconstruction optimization，我们优化基卷积核直到误差足够小。
+
+对于 data reconstruction optimization，我们逐层优化，并且可以fine-tune。
+
+我们发现第一层卷积很难／无法近似，因为它直接作用于输入的原始像素。
