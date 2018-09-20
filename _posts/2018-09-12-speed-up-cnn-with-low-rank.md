@@ -121,6 +121,17 @@ W_n * z \approx h_n * V = \sum_{k=1}^K {h_n^k * V^k} = \sum_{k=1}^K{h_n^k * (v_k
 
 对于filter reconstruction optimization，我们优化基卷积核直到误差足够小。
 
-对于 data reconstruction optimization，我们逐层优化，并且可以fine-tune。
+对于data reconstruction optimization，我们逐层优化，并且可以joint optimization（也就是说把上一层的近似后的输出，喂给下一层，而不是上一层原始的输出）。
 
-我们发现第一层卷积很难／无法近似，因为它直接作用于输入的原始像素。
+实验采用四层的CNN模型如下：
+
+<img src="/images/speed_up_cnn_with_low_rank/8.png" width="65%" height="65%">
+
+第一层卷积很难／无法近似，因为它直接作用于输入的原始像素。而第四层的卷积核大小是$$ 1 \times 1 $$，
+我们也不对它做近似了。从图中也可以看出，第二层和第三层的计算时间占到了90%，因此我们只近似这两层。
+
+
+下图是实验结果，可以看出joint data optimization效果最好。
+方法二可以达到2.5倍加速而不损失精度，4.5倍加速只损失了1%精度。
+
+<img src="/images/speed_up_cnn_with_low_rank/9.png" width="75%" height="75%">
