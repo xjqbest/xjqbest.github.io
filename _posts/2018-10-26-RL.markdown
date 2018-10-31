@@ -1,0 +1,221 @@
+---    
+layout: post
+title:  "强化学习"
+date:   2018-10-26 00:00:00
+categories: MachineLearning DeepLearning
+tags: MachineLearning DeepLearning
+excerpt: 
+---
+
+# 强化学习的任务
+
+整个过程如下：
+
+在状态 $$ s_t $$，大脑 agent 会从可以选择的动作集合 A 中选择一个动作$$ a_t $$执行。
+环境则根据 agent 的动作给 agent 反馈一个 reward $$ r_t $$，
+同时 agent 进入一个新的状态 $$ s_{t + 1} $$.
+
+从 state 到 action 的过程就称之为一个策略 Policy，一般用 $$ \pi $$ 表示。
+
+强化学习的任务就是找到一个最优的策略 Policy 从而使 Reward 最多。
+
+我们一开始并不知道最优的策略是什么，因此往往从随机的策略开始，使用随机的策略进行试验，就可以得到一系列的状态、动作和反馈。也就是一系列的样本Sample。强化学习的算法就是需要根据这些样本来改进 Policy，从而使得得到的样本中的Reward更好。
+
+# 基础
+
+## MDP（Markov Decision Process）
+
+强化学习的问题都可以模型化为MDP(马尔可夫决策过程)的问题，MDP 实际上是对环境的建模；MDP 与常见的 Markov chains 的区别是加入了action 和 rewards 的概念。
+MDP的核心问题就是找到一个策略$$ \pi(s) $$ 来决定在状态 s 下选择哪个动作。
+
+一个基本的 MDP 可以用$$ (S,A,P,R) $$表示：
+
+- S 是一个有限状态集 
+- A 是一个有限动作集 
+- P 是一个状态转移概率矩阵，$$ P_a(s, s')=P(s_{t+1}=s' \vert s_t=s, a_t=a) $$，表示在状态 s 下执行动作 a 后转移到状态 $$ s' $$ 的概率 
+- R 是一个奖励函数，$$ R_a(s, s′) $$，表示在状态 s 下执行动作 a 后转移到状态$$ s' $$所得到的回报reward 
+- $$ \pi(s)\rightarrow a $$：策略 policy，根据当前 state 来产生 action 
+
+如果我们知道了转移概率 P，也就是称为我们获得了 模型 Model，有了模型，未来就可以求解，那么获取最优的动作也就有可能，这种通过模型来获取最优动作的方法也就称为 Model-based 的方法。但是现实情况下，很多问题是很难得到准确的模型的，因此就有 Model-free 的方法来寻找最优的动作。像 Q-learning，Policy Gradient，Actor Critic这一类方法都是 model-free 的。
+
+## 回报与价值函数
+
+状态的好坏等价于对未来回报的期望。因此，引入回报来表示某个时刻t的状态将具备的回报：
+
+$$ G_t = R_{t+1} + \gamma R_{t+2} + … = \sum_{k=0}^\infty\gamma^kR_{t+k+1} $$
+
+其中$$ \gamma $$ 是 discount factor（折扣因子），一般取值在 [0,1]，
+用来区分当前回报和未来回报的重要性。
+
+从上面的式子可以， 除非整个过程结束，否则我们无法获取所有的 reward 来计算出每个状态的回报。
+
+因此，再引入一个概念：价值函数(value function),记为 $$ V(s) $$，
+通过 $$ V(s) $$来表示一个状态未来的潜在价值。从定义上看，value function 就是回报的期望：
+
+$$ V(s) = \mathbb E[G_t|S_t = s] $$
+
+对于获取最优的策略Policy这个目标，我们就会有两种方法: 
+1. 直接优化策略 $$ \pi $$ 使得回报更高。方法有Actor-Critic、DDPG、A3C等。 
+2. 通过估计 value function 来间接获得优化的策略。通过价值函数可以知道每一种状态的好坏，这样我们就知道该怎么选择了（如选择动作使得下一状态的潜在价值最大）。方法有Q-Learning、Sarsa 和 DQN等。
+
+## Bellman方程
+
+采用上面获取最优策略的第 2 种方法时，我们需要估算 Value Function，只要能够计算出价值函数，那么最优决策也就得到了。
+因此，问题就变成了如何计算Value Function。
+
+如下就是Bellman方程：
+
+\begin{align}
+V(S_t) &= \mathbb E[G_t|S_t = s]\\\
+&= \mathbb E[R_{t+1}+\gamma R_{t+2} + \gamma ^2R_{t+3} + …|S_t = s]\\\
+&= \mathbb E[R_{t+1}+\gamma (R_{t+2} + \gamma R_{t+3} + …)|S_t = s]\\\
+&= \mathbb E[R_{t+1}+\gamma G_{t+1}|S_t = s]\\\
+& = \mathbb E[R_{t+1}+\gamma V(S_{t+1})|S_t = s] 
+\end{align}
+
+## 如果转移概率 P 和奖励函数 R 已知
+
+如果转移概率 P 和奖励函数 R 已知，求解 MDP 问题常见做法有 Value iteration 或 Policy iteration
+
+### Value iteration
+
+在 Value iteration 中，策略函数 $$ \pi $$ 没有被使用，迭代公式如下:
+
+$$ V_{i+1}(s) := \max_a \sum_{s’} P_a(s,s’)(R_a(s,s’) + \gamma V_i(s’)) $$
+
+在每轮迭代中需要计算每个状态的价值，并且直到两次迭代结果的差值小于给定的阈值才能认为是收敛。
+计算的出收敛的价值函数后，就能直接够得出策略函数：
+
+<img src="/images/rl/1.png" width="45%" height="45%">
+
+
+### Policy iteration
+
+Policy iteration同时更新价值V和策略$$ \pi $$, 且一般可分成两步：
+1. Policy Evaluation，也就是Value iteration的过程
+2. Policy Improvement，就是根据更新后的Value Function来更新每个状态下的策略直到策略稳定
+
+<img src="/images/rl/2.png" width="45%" height="45%">
+
+上面两个方法的问题是需要已知转移概率P, 目的是为了遍历当前状态后的所有可能的状态，因此如果采用贪婪的思想，那么就不需要不遍历后面所有的状态，而是直接采取价值最大的状态动作来执行。
+
+# Q-Learning
+
+用一张表存储在各个状态下执行各种动作能够带来的 reward。这个表叫做Q-Table，
+里面的每个值定义为 Q(s,a), 表示在状态 s 下执行动作 a 
+所获取的 reward，那么选择的时候可以采用一个贪婪的做法，即选择价值最大的那个动作去执行。
+
+Q-Table 刚开始是随机初始化，然后通过不断执行动作获取环境的反馈并通过算法更新 Q-Table。
+
+当我们处于某个状态 s 时，根据 Q-Table 的值选择的动作 a，那么从表格获取的 reward 为 
+$$ Q(s, a) $$。这个也就是我们预期获取的reward。
+
+我们处于状态 s，选择的动作 a，然后到了状态$$ s' $$，并获取到了一个reward（记为r）那么在$$ s' $$时，又可以贪婪的选择
+$$ a' $$得到一个最大的reward为 $$ Q(s', a') $$。
+
+那么我们在状态 s，选择的动作 a后，得到的真实的Q值（$$ Q'(s, a) $$）可以用如下式子计算：
+
+$$ Q’(s,a) = r + \gamma\max_{a’}Q(s’,a’) $$
+
+其中$$ \gamma $$ 是 discount factor（折扣因子）。
+
+有了真实的reward和预期的reward，那么我们就可以更新Q-table了：
+
+$$ Q(s, a) = Q(s, a) + \alpha(Q’(s, a) - Q(s,a)) $$
+
+更新规则跟梯度下降非常相似，这里的$$ \alpha $$可理解为学习率。
+
+Q-Learning 中还存在着探索与利用(Exploration and Exploition)的问题, 大致的意思就是不要每次都遵循着当前看起来是最好的方案，而是会选择一些当前看起来不是最优的策略，这样也许会更快探索出更优的策略。
+
+Q-Learning 采用了最简单的$$ \epsilon-greedy $$, 
+就是每次有 $$ \epsilon $$ 的概率是选择当前 Q-Table 
+里面值最大的action的，$$ 1 - \epsilon1 $$ 的概率是随机选择策略的。
+
+<img src="/images/rl/3.png" width="50%" height="50%">
+
+# Sarsa
+
+Sarsa 跟 Q-Learning 非常相似，也是基于 Q-Table 进行决策的。
+不同点在于决定下一状态所执行的动作的策略，Q-Learning 在当前状态更新 Q-Table 
+时会用到下一状态Q值最大的那个动作，但是下一状态未必就会选择那个动作；但是 Sarsa 
+会在当前状态先决定下一状态要执行的动作，
+并且用下一状态要执行的动作的 Q 值来更新当前状态的 Q 值
+
+<img src="/images/rl/4.png" width="65%" height="65%">
+
+# DQN
+
+当 Q-Table 中的状态比较多，可能会导致整个 Q-Table过大。
+因此，DQN 被提了出来，通过神经网络来拟合整个 Q-Table。
+
+DQN 能够解决状态无限，动作有限的问题。
+
+<img src="/images/rl/5.png" width="70%" height="70%">
+
+
+## Experience Replay：
+
+先不断进行实验，并将这些实验步骤获取的 sample 存储在 memory 中，每一步就是一个 sample，
+对存储下来的样本进行随机采样，然后更新网络。这么做可以去掉样本之间的相关性（时间顺序）。
+
+## Separate Target Network
+
+计算上图的$$ y_j $$的时候不采用网络 Q, 
+而是采用另外一个网络(也就是 Target Network) $$ Q' $$。
+
+
+# Policy Gradient
+
+Q-Learning 系列方法是基于 value 的方法， 
+也就是通过计算每一个状态动作的价值，然后选择价值最大的动作执行。
+而Policy Gradient通过更新 Policy Network 来直接更新策略。Policy 
+Network是一个神经网络，输入是状态，输出直接就是动作而不是Q值，是一个动作或者一个动作的概率。
+
+如果能够构造一个动作评判指标，来判断一个动作的好与坏，
+那么我们就可以通过改变动作的出现概率来优化策略。设指标为f，Policy 
+Network输出的是概率p，那么f的期望作为损失函数，其梯度如下，
+其中 $$ \theta $$是神经网络参数：
+
+<img src="/images/rl/6.png" width="65%" height="65%">
+
+## 如何选择f
+
+<img src="/images/rl/7.png" width="65%" height="65%">
+
+其中$$ \Psi_t $$是 t 时刻的评价指标。通过 policy network 输出的概率
+和获取的reward(通过评估指标获取)构造目标函数，然后对 policy network 进行更新。
+
+## 更新policy network
+
+原始的 Policy Gradient 往往采用的回合更新，也就是要到一轮结束后才能进行更新。
+如某盘游戏，假如最后的结果是胜利了，那么可以认为其中的每一步都是好的，
+反之则认为其中的每一步都是不好的。其更新过程如下：
+
+<img src="/images/rl/8.png" width="65%" height="65%">
+
+一个很直观的想法就是能不能抛弃回合更新的做法，而采用单步更新？Actor-Critic 干的就是这个事情。
+
+## Actor-Critic
+
+Actor-Critic 的思想就是从 Critic 评判模块(神经网络)得到对动作的好坏评价，
+然后反馈给 Actor(神经网络) 让 Actor 更新自己的策略。
+Actor 和 Critic 分别采用不同的目标函数进行更新。
+
+## Deep Deterministic Policy Gradient(DDPG)
+
+可以解决动作无限或者说动作取值为连续值的情况。
+
+DDPG 的网络结构为 Actor 网络 + Critic 网络，对于状态 s, 先通过 Actor 网络获取 action a, 这里的 a 是一个向量；然后将 a 输入 Critic 网络，输出的是 Q 值，目标函数就是极大化 Q 值。
+
+<img src="/images/rl/9.png" width="65%" height="65%">
+
+## Asynchronous Advantage Actor-Critic(A3C)
+
+待补充
+
+## 参考资料
+
+[强化学习笔记(1)-概述](http://wulc.me/2018/05/05/%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0%281%29-%E6%A6%82%E8%BF%B0/)  
+[强化学习笔记(2)-从 Q-Learning 到 DQN](http://wulc.me/2018/05/09/%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0(2)-%E4%BB%8E%20Q-Learning%20%E5%88%B0%20DQN/)  
+[强化学习笔记(3)- 从 Policy Gradient 到 A3C](http://wulc.me/2018/05/11/%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0%E7%AC%94%E8%AE%B0(3)-%20%E4%BB%8E%20Policy%20Gradient%20%E5%88%B0%20A3C/)  
+[强化学习（一）Deep Q-Network ](https://www.hhyz.me/2018/08/05/2018-08-05-RL/)
