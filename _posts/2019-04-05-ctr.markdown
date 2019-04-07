@@ -1,0 +1,161 @@
+---
+layout: post
+title:  "学习ctr"
+date:   2019-04-05 23:59:00
+categories: MachineLearning
+tags: MachineLearning
+excerpt: 学习ctr
+---
+
+## ctr定义
+
+```
+Click-through rate (CTR) is the ratio of users who click on a specific link to the number of total users who view a page, email, or advertisement
+```
+
+每条数据通常是user的特征 + item的特征 + 标签（该user是否点击），需要预测一个[0, 1]之间的点击率。
+
+
+下面介绍各个算法。
+
+## FM
+
+原始数据经过离散化和One-Hot之后，会导致特征空间较大。 大部分样本数据特征是比较稀疏的，
+而且某些特征经过关联后，与label之间的相关性会提高，因此需要特征组合。
+
+FM，全称Factorization Machines，该算法的目的是解决稀疏数据下的特征组合问题，以此来减少人工参与特征组合工作。
+
+FM模型包含两部分，线性模型和特征组合：
+
+\begin{align}
+y(x)=w_0+\sum_{i=1}^nw_ix_i+\sum_{i=1}^n\sum_{j=i+1}^nw_{ij}x_ix_j
+\end{align}
+
+其中，n代表样本的特征数量，$$x_i$$是第i个特征的值，$$w_0$$、$$w_i$$、$$w_{ij}$$是模型的参数。  
+从这个公式可以看出，组合特征的参数一共有$$ n(n−1) / 2 $$个，任意两个参数都是独立的。
+
+这里交叉项的每一个参数$$w_{ij}$$的学习过程需要大量的
+$$x_i$$、$$x_j$$同时非零的训练样本数据。由于数据很稀疏，
+能够满足“$$x_i$$和$$x_j$$都非零”的样本数很少，训练样本不充分
+
+可以用矩阵分解解决上面的问题，所有二次项参数$$w_{ij}$$可以组成一个对称阵W，
+$$ W=V^TV $$，V的第j列便是第j维特征的隐向量。
+
+\begin{align}
+y(x)=w_0+\sum_{i=1}^nw_ix_i+\sum_{i=1}^n\sum_{j=i+1}^n⟨v_i,v_j⟩x_ix_j
+\end{align}
+
+其中，$$v_i$$是第i维特征的隐向量，$$⟨⋅,⋅⟩$$代表向量内积如下，k为隐向量的长度，：
+
+\begin{align}
+⟨v_{i},v_{j}⟩ = \sum_{f=1}^{k}{v_{i,f}\cdot v_{j,f}}
+\end{align}
+
+那么二次项的参数数量减少为kn个（其中$$k << n$$），远少于$$ n(n−1) / 2 $$。
+并且所有包含$$x_i$$的非零组合特征的样本都可以用来学习隐向量$$v_i$$。
+
+直观上看，FM的复杂度是$$ O(kn^2) $$，但是，通过下面的等价转换，
+可以将FM的二次项化简，其复杂度可以优化到O(kn)，即：
+
+
+\begin{align}
+\sum_{i=1}^n\sum_{j=i+1}^n⟨v_i,v_j⟩x_ix_j 
+ &=\frac{1}{2}\sum_{i=1}^n\sum_{f=1}^n⟨v_i,v_j⟩x_ix_j-\frac{1}{2}\sum_{i=1}^n⟨v_i,v_i⟩x_ix_i \\\
+ &=\frac{1}{2}(\sum_{i=1}^n\sum_{j=1}^n\sum_{f=1}^kv_{i,f}v_{j,f}x_ix_j-\sum_{i=1}^n\sum_{f=1}^kv_{i,f}v_{i,f}x_ix_i) \\\
+ &=\frac{1}{2}\sum_{f=1}^k[(\sum_{i=1}^nv_{i,f}x_i)·(\sum_{j=1}^nv_{j,f}x_j)-\sum_{i=1}^nv_{i,f}^2x_i^2]\\\
+ &=\frac{1}{2}\sum_{f=1}^k[(\sum_{i=1}^nv_{i,f}x_i)^2- \sum_{i=1}^nv_{i,f}^2x_i^2]
+\end{align}
+
+FM可以看成一个三层的神经网络。后面的二次项，可以看成神经网络embedding后，然后每两个向量做内积:
+
+<img src="/images/ctr/fm_1.jpg" width="40%" height="40%">
+
+## FFM
+
+Field-aware Factorization Machine，简称FFM。
+通过引入field的概念，FFM把相同性质的特征归于同一个field。
+
+假设样本的n个特征属于f个field，那么FFM的二次项有$$n \times f$$个隐向量。而在FM模型中，
+每一维特征的隐向量只有一个。FM可以看作FFM的特例，是把所有特征都归属到一个field时的FFM模型。
+
+\begin{align}
+y(x)=w_0+\sum_{i=1}^nw_ix_i+\sum_{i=1}^n\sum_{j=i+1}^n⟨v_{i,fj},v_{j,f_i}⟩x_ix_j
+\end{align}
+
+其中$$f_j$$是第j个特征所属的field。如果隐向量的长度为k，那么FFM的二次参数有nfk个。
+此外，由于隐向量与field相关，FFM二次项并不能够化简，其复杂度为$$O(kn^2)$$。
+
+## embedding + mlp
+
+是ctr预估的通用框架，各个field的特征进行embedding，然后concat到一起，然后接mlp。
+
+<img src="/images/ctr/emb_mlp_1.png" width="30%" height="30%">
+
+## FNN
+
+FM在后半部分的交叉项中为每个特征都分配一个特征向量V，
+FNN利用FM得到特征的embedding向量并将其组合成dense层作为DNN的输入的模型。
+
+<img src="/images/ctr/fnn_1.png" width="70%" height="70%">
+
+模型中做了一个假设，就是每个field只有一个值为1，即每个field是个one-hot向量。
+$$z_i=(w_i,v_i^1,v_i^2,…v_i^K)$$,其中$$w_i$$为 FM 中的一阶权重，
+$$v_i$$为对应特征的隐向量，K是向量维度。
+
+这样初始化的好处是将预训练的向量作为初始化参数时，能够让模型的参数在初始化的时候就处于较优的位置，
+能够加快收敛。
+
+## PNN
+
+PNN和FNN的主要不同在于除了得到z向量，还增加了一个p向量，即Product向量。
+Product向量由每个field的feature vector做inner product 或则 outer product 得到，作者认为这样做有助于特征交叉。另外PNN中Embeding层不再由FM生成。
+
+<img src="/images/ctr/pnn_1.png" width="70%" height="70%">
+
+其中第二层是对离散特征的Embedding。对该层的任意两个feature进行内积或是外积处理就得到上图的蓝色节点，
+
+## Wide & Deep
+
+Wide&Deep结合了wide模型的优点和deep模型的优点，网络结构如下，Wide部分是LR模型，Deep部分是DNN模型。
+
+<img src="/images/ctr/wide_deep_1.png" width="75%" height="70%">
+
+左边的Wide是传统的大规模特征+线性模型（也就是经典的LR模型），右边的Deep是一个DNN模型，
+而中间的 Wide&Deep 把两个模型在最后一层做了组合。
+
+
+Wide部分有Memorization功能：学习样本中的高频部分，优点是模型的记忆性好，
+对于样本中出现过的高频低阶特征能够用少量参数学习；缺点是模型的泛化能力差，
+例如对于没有见过的ID类特征，模型学习能力较差。需要人工的特征工程。
+
+Deep部分有Generalization功能：DNN几乎不需要特征工程，通过对低维度的
+embedding进行组合可以学习到高阶特征。优点是泛化能力强。缺点是可能过度的泛化出现bad case。
+
+
+LR部分的特征，仍然需要人工设计才能保证一个不错的效果。因为LR部分是直接作为最终预测的一部分，
+如果作为wide部分的LR特征工程做的不够完善，将影响整个wide&deep
+的模型精度。wide部分和deep部分是联合训练的。LR部分直接作为最后输出，因此embedding层是deep部分独有的。
+
+## DeepFM
+
+
+
+## Deep & Cross
+
+## xDeepFM
+
+## DIN
+
+## DIEN
+
+## 参考链接
+
+[http://www.csuldw.com/2019/02/08/2019-02-08-fm-algorithm-theory/](http://www.csuldw.com/2019/02/08/2019-02-08-fm-algorithm-theory/)  
+[https://plushunter.github.io/2017/07/13](https://plushunter.github.io/2017/07/13/%E6%9C%BA%E5%99%A8%E5%AD%A6%E4%B9%A0%E7%AE%97%E6%B3%95%E7%B3%BB%E5%88%97%EF%BC%8826%EF%BC%89%EF%BC%9A%E5%9B%A0%E5%AD%90%E5%88%86%E8%A7%A3%E6%9C%BA%EF%BC%88FM%EF%BC%89%E4%B8%8E%E5%9C%BA%E6%84%9F%E7%9F%A5%E5%88%86%E8%A7%A3%E6%9C%BA%EF%BC%88FFM%EF%BC%89/)  
+[https://www.cnblogs.com/qcloud1001/p/9817781.html](https://www.cnblogs.com/qcloud1001/p/9817781.html)  
+[https://yxzf.github.io/2017/03/dnn-for-ctr/](https://yxzf.github.io/2017/03/dnn-for-ctr/)  
+[https://daiwk.github.io/posts/dl-dl-ctr-models.html](https://daiwk.github.io/posts/dl-dl-ctr-models.html)  
+[http://itindex.net/detail/58521-ctr](http://itindex.net/detail/58521-ctr-%E6%A8%A1%E5%9E%8B-%E7%AE%80%E4%BB%8B)  
+[https://zhuanlan.zhihu.com/p/33045184](https://zhuanlan.zhihu.com/p/33045184)  
+[https://zhuanlan.zhihu.com/p/33177517](https://zhuanlan.zhihu.com/p/33177517)  
+[http://ju.outofmemory.cn/entry/347920](http://ju.outofmemory.cn/entry/347920)  
