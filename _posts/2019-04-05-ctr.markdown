@@ -72,8 +72,13 @@ FM可以看成一个三层的神经网络。后面的二次项，可以看成神
 
 ## FFM
 
+论文地址：[https://www.csie.ntu.edu.tw/~cjlin/papers/ffm.pdf](https://www.csie.ntu.edu.tw/~cjlin/papers/ffm.pdf)
+
 Field-aware Factorization Machine，简称FFM。
 通过引入field的概念，FFM把相同性质的特征归于同一个field。
+
+FM中隐向量对于不同类别的特征进行组合时都是使用同一个向量，
+而基于Field-aware的FFM就是对这点进行修改，认为当前特征对于每一个类别都有一个不同的隐向量。
 
 假设样本的n个特征属于f个field，那么FFM的二次项有$$n \times f$$个隐向量。而在FM模型中，
 每一维特征的隐向量只有一个。FM可以看作FFM的特例，是把所有特征都归属到一个field时的FFM模型。
@@ -85,6 +90,11 @@ y(x)=w_0+\sum_{i=1}^nw_ix_i+\sum_{i=1}^n\sum_{j=i+1}^n⟨v_{i,fj},v_{j,f_i}⟩x_
 其中$$f_j$$是第j个特征所属的field。如果隐向量的长度为k，那么FFM的二次参数有nfk个。
 此外，由于隐向量与field相关，FFM二次项并不能够化简，其复杂度为$$O(kn^2)$$。
 
+<img src="/images/ctr/ffm_1.png" width="60%" height="60%">
+
+实验结果上FFM也只是在某几个数据集上略好于FM，但是由于FFM时间复杂度较高，
+所以考虑到性能的时候，FM还是比较合适的选择。
+
 ## embedding + mlp
 
 是ctr预估的通用框架，各个field的特征进行embedding，然后concat到一起，然后接mlp。
@@ -92,6 +102,8 @@ y(x)=w_0+\sum_{i=1}^nw_ix_i+\sum_{i=1}^n\sum_{j=i+1}^n⟨v_{i,fj},v_{j,f_i}⟩x_
 <img src="/images/ctr/emb_mlp_1.png" width="30%" height="30%">
 
 ## FNN
+
+论文地址：[https://arxiv.org/pdf/1601.02376v1.pdf](https://arxiv.org/pdf/1601.02376v1.pdf)
 
 FM在后半部分的交叉项中为每个特征都分配一个特征向量V，
 FNN利用FM得到特征的embedding向量并将其组合成dense层作为DNN的输入的模型。
@@ -105,16 +117,33 @@ $$v_i$$为对应特征的隐向量，K是向量维度。
 这样初始化的好处是将预训练的向量作为初始化参数时，能够让模型的参数在初始化的时候就处于较优的位置，
 能够加快收敛。
 
+论文中的实验结果如下：
+
+<img src="/images/ctr/fnn_2.png" width="55%" height="55%">
+
 ## PNN
+
+论文地址：[https://arxiv.org/pdf/1611.00144.pdf](https://arxiv.org/pdf/1611.00144.pdf)
 
 PNN和FNN的主要不同在于除了得到z向量，还增加了一个p向量，即Product向量。
 Product向量由每个field的feature vector做inner product 或则 outer product 得到，作者认为这样做有助于特征交叉。另外PNN中Embeding层不再由FM生成。
 
 <img src="/images/ctr/pnn_1.png" width="70%" height="70%">
 
-其中第二层是对离散特征的Embedding。对该层的任意两个feature进行内积或是外积处理就得到上图的蓝色节点，
+其中第二层是对离散特征的Embedding。对该层的任意两个feature进行内积或是外积处理就得到上图的蓝色节点。
+如果Product Layer使用内积运算，那么就是IPNN，每个蓝点是个实数值。
+如果Product Layer使用外积运算，就得到OPNN，每个蓝点是个二维矩阵，
+针对两个M维的嵌入向量e1和e2. 它们外积得到的是$$M\astM$$的二维矩阵，
+通过和另外一个需要学习的参数矩阵，对应位置相乘，再相加，得到了一个实数值。
+如果Product Layer同时使用内积+外积，把内积和外积的结果拼接起来，就得到PNN$$\ast$$。
+
+论文中的实验结果如下：
+
+<img src="/images/ctr/pnn_2.png" width="45%" height="45%">
 
 ## Wide & Deep
+
+论文地址：[https://arxiv.org/pdf/1606.07792.pdf](https://arxiv.org/pdf/1606.07792.pdf)
 
 Wide&Deep结合了wide模型的优点和deep模型的优点，网络结构如下，Wide部分是LR模型，Deep部分是DNN模型。
 
@@ -123,6 +152,7 @@ Wide&Deep结合了wide模型的优点和deep模型的优点，网络结构如下
 左边的Wide是传统的大规模特征+线性模型（也就是经典的LR模型），右边的Deep是一个DNN模型，
 而中间的 Wide&Deep 把两个模型在最后一层做了组合。
 
+Wide&Deep结合了Wide和Deep的优点：
 
 Wide部分有Memorization功能：学习样本中的高频部分，优点是模型的记忆性好，
 对于样本中出现过的高频低阶特征能够用少量参数学习；缺点是模型的泛化能力差，
@@ -131,24 +161,29 @@ Wide部分有Memorization功能：学习样本中的高频部分，优点是模�
 Deep部分有Generalization功能：DNN几乎不需要特征工程，通过对低维度的
 embedding进行组合可以学习到高阶特征。优点是泛化能力强。缺点是可能过度的泛化出现bad case。
 
-
 LR部分的特征，仍然需要人工设计才能保证一个不错的效果。因为LR部分是直接作为最终预测的一部分，
 如果作为wide部分的LR特征工程做的不够完善，将影响整个wide&deep
 的模型精度。wide部分和deep部分是联合训练的。LR部分直接作为最后输出，因此embedding层是deep部分独有的。
 
+论文中的实验结果如下：
+
+<img src="/images/ctr/wide_deep_2.png" width="45%" height="45%">
+
 ## DeepFM
+
+论文地址：[https://arxiv.org/pdf/1703.04247.pdf](https://arxiv.org/pdf/1703.04247.pdf)
 
 DeepFM将Wide&Deep部分的LR部分替换成FM来避免人工特征工程。
 
 DeepFM包含两部分：FM部分与DNN部分，分别负责低阶特征的提取和高阶特征的提取。
 这两部分共享同样的输入。
 
-DeepFM的架构：
+DeepFM的架构：  
 （1）输入的是稀疏特征的id  
 （2）进行一层lookup 之后得到id对应的embedding向量  
 （3）这个embedding一方面作为隐向量输入到FM进行计算  
 （4）而且该embedding进行concat之后输入到一个DNN  
-（5）然后将FM和DNN的输出求和并激活之后得到预测值。
+（5）然后将FM和DNN的输出求和并激活之后得到预测值。  
 （6）FM部分和DNN部分是联合训练的  
 
 DeepFM的预测结果可以写为：$$ y = sigmoid(y_{FM} + y_{DNN}) $$
@@ -170,7 +205,13 @@ DNN部分如下：
 
 <img src="/images/ctr/deep_fm_3.jpg" width="60%" height="60%">
 
+论文中的实验结果如下：
+
+<img src="/images/ctr/deep_fm_4.png" width="45%" height="45%">
+
 ## Deep&Cross
+
+论文地址：[https://arxiv.org/pdf/1708.05123.pdf](https://arxiv.org/pdf/1708.05123.pdf)
 
 特征工程一直是很多预测模型效果突出的关键，人工设计等影响因素往往决定这这一环节的好坏，
 深度学习可以自动学习特征，却很难学到一些交叉特征。Deep&Cross Network，可以有效的寻找交叉特征。
@@ -200,9 +241,9 @@ x_{l+1}=x_0x^T_lw_l+b_l+x_l=f(x_l,w_l,b_l)+x_l
 
 - $$ x_l,x_{l+1}\in R^d $$ 是第l和第l+1层的cross layer输出的列向量
 - $$ w_l,b_l\in R^d $$ 是第l层的权重和bias
-- 每一层的cross layer在进行完feature crossing的f之后，又加上了输入。借鉴了ResNet的思想，要去拟合的是$$ x_{l+1}−x_l $$这一项残差
+- 每一层的cross layer在进行完feature crossing的f之后，又加上了输入。借鉴了ResNet的思想，要去拟合的是$$ x_{l+1}−x_l $$这一项残差。
 
-<img src="/images/ctr/dcn_2.jpg" width="60%" height="60%">
+<img src="/images/ctr/dcn_2.jpg" width="50%" height="50%">
 
 复杂度分析：假设$$L_c$$表示cross layers的数目，$$d$$表示输入$$x_0$$的维度。
 那么，在该cross network中涉及的参数数目为：$$ d \times L_c \times 2 $$
@@ -210,6 +251,10 @@ x_{l+1}=x_0x^T_lw_l+b_l+x_l=f(x_l,w_l,b_l)+x_l
 一个cross network的时间和空间复杂度对于输入维度是线性关系，因此DCN的整体复杂度与传统的DNN一致。
 
 输出：将DNN模型和Cross模型输出的向量进行concat后，用LR进行点击率预测。
+
+论文中的实验结果如下：
+
+<img src="/images/ctr/dcn_3.png" width="45%" height="45%">
 
 ## xDeepFM
 
