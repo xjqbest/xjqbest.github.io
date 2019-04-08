@@ -170,9 +170,46 @@ DNN部分如下：
 
 <img src="/images/ctr/deep_fm_3.jpg" width="60%" height="60%">
 
-## Deep & Cross
+## Deep&Cross
 
+特征工程一直是很多预测模型效果突出的关键，人工设计等影响因素往往决定这这一环节的好坏，
+深度学习可以自动学习特征，却很难学到一些交叉特征。Deep&Cross Network，可以有效的寻找交叉特征。
+能够进行任意高阶交叉的神经网络。
 
+与DeepFM类似，DCN是由Embedding + MLP部分与Cross部分进行联合训练的。Cross部分是对FM部分的推广。
+
+<img src="/images/ctr/dcn_1.png" width="60%" height="60%">
+
+输入为Embedding and Stacking Layer：DCN模型的输入为连续特征(Dense Feature)和
+id类的离散特征(Sparse Feature) ，同时将离散特征处理成embedding向量，
+将embedding向量和归一化后的dense特征拼接成一个向量：
+
+\begin{align}
+x_0=[x^T_{embed,1},...x^T_{embed,k},x^T_{dense}]
+\end{align}
+
+左边的Cross Network：
+
+进行特征交叉，每一个cross layer的公式如下：
+
+\begin{align}
+x_{l+1}=x_0x^T_lw_l+b_l+x_l=f(x_l,w_l,b_l)+x_l
+\end{align}
+
+其中：
+
+- $$ x_l,x_{l+1}\in R^d $$ 是第l和第l+1层的cross layer输出的列向量
+- $$ w_l,b_l\in R^d $$ 是第l层的权重和bias
+- 每一层的cross layer在进行完feature crossing的f之后，又加上了输入。借鉴了ResNet的思想，要去拟合的是$$ x_{l+1}−x_l $$这一项残差
+
+<img src="/images/ctr/dcn_2.jpg" width="60%" height="60%">
+
+复杂度分析：假设$$L_c$$表示cross layers的数目，$$d$$表示输入$$x_0$$的维度。
+那么，在该cross network中涉及的参数数目为：$$ d \times L_c \times 2 $$
+
+一个cross network的时间和空间复杂度对于输入维度是线性关系，因此DCN的整体复杂度与传统的DNN一致。
+
+输出：将DNN模型和Cross模型输出的向量进行concat后，用LR进行点击率预测。
 
 ## xDeepFM
 
@@ -192,4 +229,10 @@ DNN部分如下：
 [https://zhuanlan.zhihu.com/p/33177517](https://zhuanlan.zhihu.com/p/33177517)  
 [http://ju.outofmemory.cn/entry/347920](http://ju.outofmemory.cn/entry/347920)  
 [http://kubicode.me/2018/02/23/Deep%20Learning/Deep-in-out-Factorization-Machines-Series/](http://kubicode.me/2018/02/23/Deep%20Learning/Deep-in-out-Factorization-Machines-Series/)  
-[https://www.jianshu.com/p/6f1c2643d31b](https://www.jianshu.com/p/6f1c2643d31b)
+[https://www.jianshu.com/p/6f1c2643d31b](https://www.jianshu.com/p/6f1c2643d31b)  
+[http://blog.leanote.com/post/ryan_fan/Deep-Cross-Network](http://blog.leanote.com/post/ryan_fan/Deep-Cross-Network)  
+[https://xudongyang.coding.me/dcn/](https://xudongyang.coding.me/dcn/)  
+[https://nirvanada.github.io/2017/12/14/DCN/](https://nirvanada.github.io/2017/12/14/DCN/)  
+[https://daiwk.github.io/posts/dl-deep-cross-network.html](https://daiwk.github.io/posts/dl-deep-cross-network.html)  
+[https://daiwk.github.io/posts/dl-dl-ctr-models.html#deep--cross](https://daiwk.github.io/posts/dl-dl-ctr-models.html#deep--cross)  
+
