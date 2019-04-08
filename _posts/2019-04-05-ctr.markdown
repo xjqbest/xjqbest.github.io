@@ -138,9 +138,41 @@ LR部分的特征，仍然需要人工设计才能保证一个不错的效果。
 
 ## DeepFM
 
+DeepFM将Wide&Deep部分的LR部分替换成FM来避免人工特征工程。
 
+DeepFM包含两部分：FM部分与DNN部分，分别负责低阶特征的提取和高阶特征的提取。
+这两部分共享同样的输入。
+
+DeepFM的架构：
+（1）输入的是稀疏特征的id  
+（2）进行一层lookup 之后得到id对应的embedding向量  
+（3）这个embedding一方面作为隐向量输入到FM进行计算  
+（4）而且该embedding进行concat之后输入到一个DNN  
+（5）然后将FM和DNN的输出求和并激活之后得到预测值。
+（6）FM部分和DNN部分是联合训练的  
+
+DeepFM的预测结果可以写为：$$ y = sigmoid(y_{FM} + y_{DNN}) $$
+
+<img src="/images/ctr/deep_fm_1.jpg" width="60%" height="60%">
+
+比起Wide&Deep的LR部分，DeepFM采用FM作为Wide部分的输出，如下图：
+
+<img src="/images/ctr/deep_fm_2.jpg" width="60%" height="60%">
+
+FM输出如下：
+
+\begin{align}
+y_{\text{FM}} = \left \langle W,X \right \rangle + \sum_i^n \sum_{j=i+1}^n \left \langle v_i,v_j \right \rangle x_i x_j
+\end{align}
+
+
+DNN部分如下：
+
+<img src="/images/ctr/deep_fm_3.jpg" width="60%" height="60%">
 
 ## Deep & Cross
+
+
 
 ## xDeepFM
 
@@ -159,3 +191,5 @@ LR部分的特征，仍然需要人工设计才能保证一个不错的效果。
 [https://zhuanlan.zhihu.com/p/33045184](https://zhuanlan.zhihu.com/p/33045184)  
 [https://zhuanlan.zhihu.com/p/33177517](https://zhuanlan.zhihu.com/p/33177517)  
 [http://ju.outofmemory.cn/entry/347920](http://ju.outofmemory.cn/entry/347920)  
+[http://kubicode.me/2018/02/23/Deep%20Learning/Deep-in-out-Factorization-Machines-Series/](http://kubicode.me/2018/02/23/Deep%20Learning/Deep-in-out-Factorization-Machines-Series/)  
+[https://www.jianshu.com/p/6f1c2643d31b](https://www.jianshu.com/p/6f1c2643d31b)
