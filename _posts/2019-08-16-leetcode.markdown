@@ -1,0 +1,400 @@
+---
+layout: post
+title:  "leetcode整理"
+date:   2019-08-16 23:54:02
+categories: LeetCode
+tags: LeetCode
+excerpt: LeetCode
+---
+
+
+
+# 刷题秘籍1
+
+[algorithm-essentials-cpp.pdf](/docs/leetcode/algorithm-essentials-cpp.pdf) 
+
+[programming_slightly.pdf](/docs/leetcode/programming_slightly.pdf) 
+
+
+
+# 题目整理
+
+## 链表
+
+### 反转链表
+
+```cpp
+ListNode* reverseList(ListNode* head) {
+        if (head == nullptr || head->next == nullptr) {
+            return head;
+        }
+        ListNode newhead(-1);
+        ListNode* p = &newhead;
+        while(head != nullptr) {
+            ListNode* next = head->next;
+            head->next = p->next;
+            p->next = head;
+            head = next;
+        }
+        return p->next;
+    }
+```
+
+
+### 中间节点
+
+```cpp
+ListNode* find_mid(ListNode* head) {
+        if(!head || !head->next) {
+            return head;
+        }
+        ListNode* slow = head;
+        ListNode* fast = head;
+        while (fast->next && fast->next->next) {
+            slow = slow->next;
+            fast = fast->next->next;
+        }
+        return slow;
+    }
+```
+
+### 相交链表
+
+```cpp
+ListNode* getIntersectionNode(ListNode* headA, ListNode* headB) {
+        if (headA == nullptr || headB == nullptr) {
+            return nullptr;
+        } 
+        int lena = 0;
+        int lenb = 0;
+        for(ListNode* i = headA; i != nullptr; i = i->next) {
+            ++lena;
+        }
+        for(ListNode* i = headB; i != nullptr; i = i->next) {
+            ++lenb;
+        }
+        ListNode* n1 = nullptr;
+        ListNode* n2 = nullptr;
+        int len1 = 0;
+        int len2 = 0;
+        if (lena > lenb) {
+            n1 = headA;
+            n2 = headB;
+            len1 = lena;
+            len2 = lenb;
+        } else {
+            n1 = headB;
+            n2 = headA;
+            len1 = lenb;
+            len2 = lena;
+        }
+        for (int i = len1 - len2; i > 0; --i) {
+            n1 = n1->next;
+        }
+        while (n1 != n2) {
+            n1 = n1->next;
+            n2 = n2->next;
+        }
+        return n1;
+    }
+```
+
+### 环形链表
+
+```cpp
+ListNode *detectCycle(ListNode *head) {
+        if (!head || !head->next) {
+            return nullptr;
+        }
+        ListNode* slow = head;
+        ListNode* fast = head;
+        bool has_cyc = false;
+        while(fast && fast->next) {
+            slow = slow->next;
+            fast = fast->next->next;
+            if (slow == fast) {
+                has_cyc = true;
+                break;
+            }
+        }
+        if (!has_cyc) {
+            return nullptr;
+        }
+        slow = head;
+        while (slow != fast) {
+            slow = slow->next;
+            fast = fast->next;
+        }
+        return slow;
+    }
+```
+
+### 链表的MergeSort
+
+```cpp
+    ListNode* sortList(ListNode* head) {
+        if (!head || !head->next) {
+            return head;
+        }
+        ListNode* mid = find_mid(head);
+        ListNode* right = mid->next;
+        mid->next = nullptr;
+        ListNode* left = sortList(head);
+        right = sortList(right);
+        ListNode* ret = merge_sorted_list(left, right);
+        return ret;
+    }
+
+    ListNode* find_mid(ListNode* head) {
+        if(!head || !head->next) {
+            return head;
+        }
+        ListNode* slow = head;
+        ListNode* fast = head;
+        while (fast->next && fast->next->next) {
+            slow = slow->next;
+            fast = fast->next->next;
+        }
+        return slow;
+    }
+    ListNode* merge_sorted_list(ListNode* a, ListNode* b) {
+        if (!a) {
+            return b;
+        } else if (!b) {
+            return a;
+        }
+        ListNode* p = nullptr;
+        if (a->val < b->val) {
+            p = a;
+            a = a->next;
+        } else {
+            p = b;
+            b = b->next;
+        }
+        ListNode* ret = p;
+        while(a && b) {
+            if (a->val < b->val) {
+                p->next = a;
+                a = a->next;
+            } else {
+                p->next = b;
+                b = b->next;
+            }
+            p = p->next;
+        }
+        if (a) {
+            p->next = a;
+        } else if (b) {
+            p->next = b;
+        }
+        return ret;
+    }
+```
+
+### 链表插入排序
+
+```cpp
+    ListNode* insertionSortList(ListNode* head) {
+        if (!head || !head->next) {
+            return head;
+        }
+        ListNode newhead(-1);
+        for (ListNode* p = head; p != nullptr; ) {
+            ListNode* i = &newhead;
+            while(i->next && i->next->val < p->val) {
+                i = i->next;
+            }
+            ListNode* pnext = p->next;
+            if (i->next == nullptr) {
+                p->next = nullptr;
+                i->next = p;
+            } else {
+                p->next = i->next;
+                i->next = p;
+            }
+            p = pnext;
+        }
+        return newhead.next;
+    }
+```
+
+### 链表两数相加
+
+```cpp
+    ListNode* addTwoNumbers(ListNode* l1, ListNode* l2) {
+        ListNode newhead(-1);
+        ListNode* ph = &newhead;
+        int carry = 0;
+        while (l1 || l2) {
+            int num = carry;
+            if (l1) {
+                num += l1->val;
+                l1 = l1->next;
+            }
+            if (l2) {
+                num += l2->val;
+                l2 = l2->next;
+            }
+            
+            carry = num / 10;
+            num = num % 10;
+            ListNode* p = new ListNode(num);
+            ph->next = p;
+            ph = p;
+        }
+        if (carry > 0) {
+            ListNode* p = new ListNode(carry);
+            ph->next = p;
+        }
+        return newhead.next;
+    }
+```
+
+### 删除倒数第n个
+
+```cpp
+    ListNode* removeNthFromEnd(ListNode* head, int n) {
+        if (head == nullptr) {
+            return nullptr;
+        }
+        ListNode newhead(-1);
+        newhead.next = head;
+        ListNode* p1 = &newhead;
+        ListNode* p2 = &newhead;
+        while (n > 0) {
+            p2 = p2->next;
+            --n;
+        }
+        while (p2 && p2->next) {
+            p1 = p1->next;
+            p2 = p2->next;
+        }
+        ListNode* temp = p1->next;
+        p1->next = p1->next->next;
+        delete temp;
+        return newhead.next;
+    }
+```
+
+### 合并两个有序链表
+
+```cpp
+    ListNode* mergeKLists(vector<ListNode*>& lists) {
+        ListNode res(-1);
+        ListNode* p = &res;
+        for (ListNode* i : lists) {
+            if(i) {
+                pq.push(i);
+            }
+        }
+        while(!pq.empty()) {
+            ListNode* v = pq.top();
+            pq.pop();
+            p->next = v;
+            p = v;
+            if(v->next) {
+                pq.push(v->next);
+            }
+        }
+        return res.next;
+    }
+    std::priority_queue<ListNode*, vector<ListNode*>, cmp> pq;
+```
+
+### 两两交换链表中的节点
+
+```cpp
+    ListNode* swapPairs(ListNode* head) {
+        if(!head || !head->next) {
+            return head;
+        }
+        ListNode newhead(-1);
+        newhead.next = head;
+        ListNode* p1 = &newhead;
+        ListNode* p2 = head;
+        while(p1 && p2 && p1->next && p2->next) {
+            ListNode* p2nn = p2->next->next;
+            p1->next = p2->next;
+            p2->next->next = p2;
+            p2->next = p2nn;
+            p1 = p2;
+            p2 = p2->next;
+        }
+        return newhead.next;
+    }
+```
+
+### 每K个反转
+
+```cpp
+    ListNode* reverseKGroup(ListNode* head, int k) {
+        if (!head || k <= 1) {
+            return head;
+        }
+        ListNode newhead(-1);
+        newhead.next = head;
+        ListNode* p1 = &newhead;
+        ListNode* p2 = p1;
+        while (true) {
+            int i = 0;
+            while (i < k && p2 && p2->next) {
+                p2 = p2->next;
+                ++i;
+            }
+            if (i != k) {
+                break;
+            }
+            ListNode* p1_next = p1->next;
+            ListNode* p2_next = p2->next;
+            for(ListNode* j = p1->next; j != p2_next; ) {
+                ListNode* j_next = j->next;
+                ListNode* p1_next = p1->next;
+                p1->next = j;
+                j->next = p1_next;
+                j = j_next;
+            }
+            p1_next->next = p2_next;
+            p1 = p1_next;
+            p2 = p1;
+        }
+        return newhead.next;
+    }
+```
+
+### rotate
+
+```cpp
+    ListNode* rotateRight(ListNode* head, int k) {
+        if (!head || !head->next || k <= 0) {
+            return head;
+        }
+        int len = 1;
+        ListNode* p = head;
+        while (p->next) {
+            ++len;
+            p = p->next;
+        }
+        k = k % len;
+        p->next = head;
+        p = head;
+        for (int i = len - k; i > 1; --i) {
+            p = p->next;
+            --k;
+        }
+        ListNode* ret = p->next;
+        p->next = nullptr;
+        return ret;
+    }
+```
+
+## 其他
+
+- 移除数组中重复的元素
+
+    （1）数组排好序：记录两个下标，一个是结果数组，一个是遍历的index  
+    （2）数组排好序，允许最多重复k次，还是记录两个下标，跨度是k  
+    （3）数组不排好序，可以用map  
+
+- 最长连续序列
+
+    要求时间复杂度O（n）,首先要想到哈希表
