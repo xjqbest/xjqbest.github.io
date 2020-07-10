@@ -15,6 +15,7 @@ excerpt: 常见深度学习框架调研-byteps
 
 你有一个大规模的GPU集群，同时又有着包含大量的CPU、带宽资源的大池子。
 
+byteps其实只是为了优化allreduce通信。
 
 
 #### 为什么比allreduce模式要好
@@ -25,7 +26,7 @@ excerpt: 常见深度学习框架调研-byteps
 
 （但是也多用了n个cpu机器作为pserver）
 
-在GPU集群中（无只有cpu的机器），如果使用pserver模式，就是一半worker一半server（因为带宽对等会更快），server端的GPU资源没有利用起来。
+在GPU集群中（无只有cpu的机器），如果使用pserver模式(不是真正的ps架构，只是为了优化allreduce而已)，就是一半worker一半server（因为带宽对等会更快），server端的GPU资源没有利用起来。
 
 
 #### 优势
