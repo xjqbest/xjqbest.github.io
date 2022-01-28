@@ -10,11 +10,11 @@ icon: heart
 
 ## Basic Information
 
-1. Name:  xujiaqi
+1. Name:  
 
-2. Company: 百度 深度学习技术平台部 
+2. Company: 
 
-3. Contact me: 173596896 qq email
+3. Contact me: 
 
 ## Skills
 
